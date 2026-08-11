@@ -1,13 +1,13 @@
 'use client';
 
 import * as React from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
   Lock,
   Mail,
   ArrowRight,
   ShieldCheck,
-  Compass,
   User,
   CheckCircle2,
   AlertCircle,
@@ -207,8 +207,8 @@ export default function LoginPage() {
         <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
         <Card className="w-full max-w-md p-4 shadow-2xl border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95">
           <CardHeader className="text-center pb-2">
-            <div className="w-12 h-12 rounded-xl bg-red-600 mx-auto flex items-center justify-center shadow-lg shadow-red-600/30 mb-3">
-              <Compass className="w-6 h-6 text-white" />
+            <div className="mx-auto mb-3">
+              <Image src="/logo.png" alt="Canadá Sem Filtro" width={200} height={56} className="h-12 w-auto object-contain mx-auto" priority />
             </div>
             <CardTitle className="text-xl font-bold text-slate-900 dark:text-slate-50">Recuperar Senha</CardTitle>
             <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
@@ -286,16 +286,17 @@ export default function LoginPage() {
       <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-indigo-500/10 dark:bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
 
       <Card className="w-full max-w-lg p-2 shadow-2xl relative z-10 border-slate-200 dark:border-slate-800 backdrop-blur-md bg-white/95 dark:bg-slate-900/95">
-        <CardHeader className="text-center pb-2">
-          <div className="w-12 h-12 rounded-xl bg-red-600 mx-auto flex items-center justify-center text-white text-2xl shadow-lg shadow-red-600/30 mb-3">
-            <Compass className="w-6 h-6 text-white" />
+        <CardHeader className="text-center pb-4">
+          <div className="mx-auto mb-2">
+            <Image
+              src="/logo.png"
+              alt="Canadá Sem Filtro — Central de Atendimento CRM"
+              width={240}
+              height={68}
+              className="h-16 w-auto object-contain mx-auto"
+              priority
+            />
           </div>
-          <CardTitle className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
-            Canadá Sem Filtro
-          </CardTitle>
-          <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
-            Central Operacional de Atendimento & Gestão CRM
-          </CardDescription>
         </CardHeader>
 
         <CardContent>

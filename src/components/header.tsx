@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { Search, Shield, User, LogOut, Activity, Compass, Sliders, BarChart3, X } from 'lucide-react';
+import Image from 'next/image';
+import { Search, Shield, User, LogOut, Activity, Sliders, BarChart3, X } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { UserRole } from '@/types/database.types';
 import { Input } from '@/components/ui/input';
@@ -55,18 +56,16 @@ export function Header({
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         {/* Brand Logo & Title */}
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-red-600 flex items-center justify-center text-white font-bold shadow-md shadow-red-600/20">
-            <Compass className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-base font-bold text-slate-900 dark:text-slate-50 leading-tight cursor-pointer" onClick={() => window.location.href = '/'}>
-              Canadá Sem Filtro
-            </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-              Central de Atendimento CRM
-            </p>
-          </div>
+        <div className="flex items-center">
+          <Image
+            src="/logo.png"
+            alt="Canadá Sem Filtro — Central de Atendimento CRM"
+            width={200}
+            height={56}
+            className="h-10 w-auto object-contain cursor-pointer"
+            onClick={() => window.location.href = '/'}
+            priority
+          />
         </div>
 
         {/* Search Bar with Input Component */}
