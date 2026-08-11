@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Search, Shield, User, LogOut, Activity, Compass, Sliders, BarChart3 } from 'lucide-react';
+import { Search, Shield, User, LogOut, Activity, Compass, Sliders, BarChart3, X } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { UserRole } from '@/types/database.types';
 import { Input } from '@/components/ui/input';
@@ -79,8 +79,22 @@ export function Header({
               value={searchQuery}
               onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
               placeholder="Pesquisar cliente, e-mail ou transação... (Cmd + K)"
-              className="pl-9"
+              className="pl-9 pr-9"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (onSearchChange) onSearchChange('');
+                  inputRef.current?.focus();
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors z-10"
+                title="Limpar pesquisa"
+                aria-label="Limpar pesquisa"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
