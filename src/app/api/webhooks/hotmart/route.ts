@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { grantsDiagnosticAccess, parseHotmartWebhook, HotmartWebhookPayload } from '@/lib/hotmart';
 import { normalizedClientIdentity } from '@/lib/normalize-client';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { encryptClientRecord } from '@/lib/crypto';
 
 export async function POST(request: NextRequest) {
   try {
@@ -77,10 +78,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 3. Criar ou Atualizar Cliente (deduplicação atômica por e-mail normalizado)
+    // 3. Criar ou Atualizar Cliente (deduplicação atômica por e-mail normalizado e criptografia PGP)
     if (parsedEvent.buyerEmail) {
       try {
-        const clientPayload = normalizedClientIdentity({
+        const rawClientPayload = normalizedClientIdentity({
           name: parsedEvent.buyerName,
           email: parsedEvent.buyerEmail,
           phone: parsedEvent.buyerPhone,
@@ -96,6 +97,8 @@ export async function POST(request: NextRequest) {
           source: 'hotmart',
           status_journey: parsedEvent.mappedJourneyState,
         });
+
+        const clientPayload = encryptClientRecord(rawClientPayload);
 
         const { data: client } = await (supabase as any)
           .from('clients')

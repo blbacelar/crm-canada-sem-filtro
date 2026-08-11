@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { calculateBusinessHoursSLA } from '@/lib/sla';
 import { normalizedClientIdentity } from '@/lib/normalize-client';
+import { decryptClientRecord, encryptClientRecord } from '@/lib/crypto';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -19,8 +20,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Enriquecer dados de clientes com o cálculo em tempo real do SLA em horas úteis e dados de compras
-    const enrichedClients = ((clients || []) as any[]).map((client) => {
+    // Enriquecer e descriptografar dados de clientes para exibição autorizada no CRM
+    const enrichedClients = ((clients || []) as any[]).map((rawClient) => {
+      const client = decryptClientRecord(rawClient);
       const slaResult = calculateBusinessHoursSLA(client.created_at || new Date().toISOString(), 24);
       const purchase = Array.isArray(client.purchases) && client.purchases.length > 0 ? client.purchases[0] : null;
 
