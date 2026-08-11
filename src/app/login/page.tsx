@@ -95,14 +95,15 @@ export default function LoginPage() {
     }
 
     try {
-      // 1. Criar novo usuário no Supabase Auth com Role definida nos metadados
+      // 1. Criar novo usuário no Supabase Auth com Papel Padrão (consultant)
+      const defaultRole: UserRole = 'consultant';
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
           data: {
             name: name.trim(),
-            role: selectedRole,
+            role: defaultRole,
           },
         },
       });
@@ -114,11 +115,10 @@ export default function LoginPage() {
 
       // Persistir perfil localmente para acesso imediato ao CRM
       localStorage.setItem('crm_user_email', email.trim());
-      localStorage.setItem('crm_user_role', selectedRole);
+      localStorage.setItem('crm_user_role', defaultRole);
       localStorage.setItem('crm_user_name', name.trim());
 
-      const roleTitle = selectedRole === 'admin' ? 'Administradora' : selectedRole === 'consultant' ? 'Consultora' : 'Marketing';
-      setSuccess(`Usuário ${name} registrado com sucesso com o papel de ${roleTitle}! Redirecionando para o CRM...`);
+      setSuccess(`Usuário ${name} cadastrado com sucesso como Consultora (Operador Padrão)! Redirecionando para o CRM...`);
 
       setTimeout(() => {
         router.push('/');
@@ -286,54 +286,12 @@ export default function LoginPage() {
                   </div>
                 </div>
 
-                {/* Seleção de Papel (Role) */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wider">
-                    Atribuir Papel no Sistema (Role):
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {/* Admin Card */}
-                    <div
-                      onClick={() => setSelectedRole('admin')}
-                      className={`p-3 rounded-lg border cursor-pointer transition-all flex flex-col items-center text-center ${
-                        selectedRole === 'admin'
-                          ? 'bg-red-500/10 border-red-500 text-red-600 dark:text-red-400 font-bold shadow-sm'
-                          : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-400'
-                      }`}
-                    >
-                      <Crown className="w-5 h-5 mb-1 text-red-500" />
-                      <span className="text-xs font-bold">Administradora</span>
-                      <span className="text-[10px] opacity-75 mt-0.5">Acesso Total</span>
-                    </div>
-
-                    {/* Consultant Card */}
-                    <div
-                      onClick={() => setSelectedRole('consultant')}
-                      className={`p-3 rounded-lg border cursor-pointer transition-all flex flex-col items-center text-center ${
-                        selectedRole === 'consultant'
-                          ? 'bg-blue-500/10 border-blue-500 text-blue-600 dark:text-blue-400 font-bold shadow-sm'
-                          : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-400'
-                      }`}
-                    >
-                      <Briefcase className="w-5 h-5 mb-1 text-blue-500" />
-                      <span className="text-xs font-bold">Consultora</span>
-                      <span className="text-[10px] opacity-75 mt-0.5">Atendimento</span>
-                    </div>
-
-                    {/* Marketing Card */}
-                    <div
-                      onClick={() => setSelectedRole('marketing')}
-                      className={`p-3 rounded-lg border cursor-pointer transition-all flex flex-col items-center text-center ${
-                        selectedRole === 'marketing'
-                          ? 'bg-purple-500/10 border-purple-500 text-purple-600 dark:text-purple-400 font-bold shadow-sm'
-                          : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-400'
-                      }`}
-                    >
-                      <BarChart2 className="w-5 h-5 mb-1 text-purple-500" />
-                      <span className="text-xs font-bold">Marketing</span>
-                      <span className="text-[10px] opacity-75 mt-0.5">Métricas BI</span>
-                    </div>
-                  </div>
+                {/* Nota de Segurança RBAC */}
+                <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-medium flex items-start gap-2">
+                  <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>
+                    Novas contas são cadastradas como <strong>Operador Padrão (Consultora)</strong>. A alteração de papéis (Admin / Marketing) é realizada exclusivamente por um Administrador logado no painel de configurações.
+                  </span>
                 </div>
 
                 <Button type="submit" disabled={loading} className="w-full gap-2 group mt-2 bg-red-600 hover:bg-red-700 text-white">
@@ -341,7 +299,7 @@ export default function LoginPage() {
                     <span>Registrando...</span>
                   ) : (
                     <>
-                      <span>Criar Nova Conta & Atribuir Papel</span>
+                      <span>Criar Conta de Operador</span>
                       <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                     </>
                   )}
