@@ -535,7 +535,7 @@ export default function HomePage() {
                       className={client.is_overdue ? 'border-l-4 border-l-red-500 bg-red-500/5' : ''}
                     >
                       <TableCell>
-                        <span className={`px-2.5 py-1 rounded-full font-semibold text-[11px] inline-flex items-center gap-1 ${labelInfo.bg} ${labelInfo.text}`}>
+                        <span className={`px-2.5 py-1 rounded-full font-semibold text-[11px] inline-flex items-center justify-center text-center gap-1 ${labelInfo.bg} ${labelInfo.text}`}>
                           {labelInfo.label}
                         </span>
                       </TableCell>

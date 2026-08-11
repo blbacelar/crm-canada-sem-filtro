@@ -54,15 +54,15 @@ export function Header({
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-22 sm:h-24 flex items-center justify-between gap-4 py-2">
         {/* Brand Logo & Title */}
         <div className="flex items-center">
           <Image
             src="/logo.png"
             alt="Canadá Sem Filtro — Central de Atendimento CRM"
-            width={260}
-            height={72}
-            className="h-13 sm:h-14 w-auto object-contain cursor-pointer transition-transform hover:scale-105"
+            width={320}
+            height={90}
+            className="h-16 sm:h-18 w-auto object-contain cursor-pointer transition-transform hover:scale-105"
             onClick={() => window.location.href = '/'}
             priority
           />
