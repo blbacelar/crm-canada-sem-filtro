@@ -182,6 +182,12 @@ export default function HomePage() {
           commission_amount: 44.1,
         }));
         setClients(apiClients);
+        // Atualizar o cliente atualmente aberto no drawer com os dados mais recentes do Supabase
+        setSelectedClient((prev) => {
+          if (!prev) return null;
+          const updated = apiClients.find((c) => c.id === prev.id || c.email.toLowerCase() === prev.email.toLowerCase());
+          return updated || prev;
+        });
       }
     } catch (err) {
       console.error('Erro ao carregar clientes:', err);
