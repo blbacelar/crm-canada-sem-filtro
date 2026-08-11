@@ -9,11 +9,9 @@ import {
   ShieldCheck,
   Compass,
   User,
-  Crown,
-  Briefcase,
-  BarChart2,
   CheckCircle2,
   AlertCircle,
+  Clock,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Input } from '@/components/ui/input';
@@ -31,12 +29,11 @@ export default function LoginPage() {
   const [name, setName] = React.useState('');
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
-  const [selectedRole, setSelectedRole] = React.useState<UserRole>('admin');
-
   // Status & Error
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [success, setSuccess] = React.useState('');
+  const [pendingApproval, setPendingApproval] = React.useState(false);
 
   const supabase = createClient();
 
@@ -54,23 +51,25 @@ export default function LoginPage() {
       });
 
       if (authError) {
-        // Fallback gracioso para ambiente de demonstração local se o usuário ainda não tiver sido registrado no Supabase Auth
-        console.warn('Alerta Auth Supabase:', authError.message);
-        
-        // Simulação de login autorizada para o e-mail informado
-        const fallbackRole: UserRole = email.includes('consult') ? 'consultant' : email.includes('market') ? 'marketing' : 'admin';
-        localStorage.setItem('crm_user_email', email.trim());
-        localStorage.setItem('crm_user_role', fallbackRole);
-
-        setSuccess('Sessão iniciada com sucesso! Redirecionando...');
-        setTimeout(() => router.push('/'), 600);
+        setError('E-mail ou senha incorretos. Verifique suas credenciais.');
         return;
       }
 
       if (data?.user) {
-        const userMetadataRole = (data.user.user_metadata?.role as UserRole) || 'admin';
+        const userStatus = data.user.user_metadata?.status;
+        const userMetadataRole = (data.user.user_metadata?.role as UserRole) || 'consultant';
+
+        // Bloquear acesso se status ainda for 'pending'
+        if (userStatus === 'pending') {
+          // Sign out immediately — access denied until admin approves
+          await supabase.auth.signOut();
+          setPendingApproval(true);
+          return;
+        }
+
         localStorage.setItem('crm_user_email', data.user.email || email.trim());
         localStorage.setItem('crm_user_role', userMetadataRole);
+        localStorage.setItem('crm_user_name', data.user.user_metadata?.name || '');
 
         setSuccess('Login efetuado com sucesso! Redirecionando...');
         setTimeout(() => router.push('/'), 600);
@@ -95,15 +94,15 @@ export default function LoginPage() {
     }
 
     try {
-      // 1. Criar novo usuário no Supabase Auth com Papel Padrão (consultant)
-      const defaultRole: UserRole = 'consultant';
+      // Criar usuário com status=pending — acesso liberado apenas após aprovação do Admin
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
           data: {
             name: name.trim(),
-            role: defaultRole,
+            role: 'consultant',        // papel padrão, admin pode alterar depois
+            status: 'pending',         // BLOQUEADO até aprovação administrativa
           },
         },
       });
@@ -113,22 +112,45 @@ export default function LoginPage() {
         return;
       }
 
-      // Persistir perfil localmente para acesso imediato ao CRM
-      localStorage.setItem('crm_user_email', email.trim());
-      localStorage.setItem('crm_user_role', defaultRole);
-      localStorage.setItem('crm_user_name', name.trim());
-
-      setSuccess(`Usuário ${name} cadastrado com sucesso como Consultora (Operador Padrão)! Redirecionando para o CRM...`);
-
-      setTimeout(() => {
-        router.push('/');
-      }, 1200);
+      // NÃO redirecionar — mostrar tela de aguardo de aprovação
+      setSuccess(
+        `Solicitação enviada com sucesso, ${name}! Sua conta está aguardando aprovação de um Administrador. Você receberá acesso assim que for aprovado.`
+      );
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro ao criar a conta.');
     } finally {
       setLoading(false);
     }
   };
+
+  // Tela de Acesso Pendente — usuário autenticado mas ainda não aprovado pelo Admin
+  if (pendingApproval) {
+    return (
+      <div className="min-h-screen w-full flex flex-col justify-center items-center p-4 bg-slate-50 dark:bg-slate-950 transition-colors">
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+        <Card className="w-full max-w-md p-4 shadow-2xl border-amber-500/30 bg-white/95 dark:bg-slate-900/95 text-center space-y-4">
+          <div className="w-16 h-16 rounded-full bg-amber-500/10 border-2 border-amber-500/30 mx-auto flex items-center justify-center">
+            <Clock className="w-8 h-8 text-amber-500" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-50">Aguardando Aprovação</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Sua conta foi criada com sucesso, mas o acesso ao CRM está <strong>pendente de aprovação</strong> por um Administrador.
+          </p>
+          <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs">
+            <p className="font-semibold">O que acontece agora?</p>
+            <p className="mt-1">Um Administrador irá revisar seu cadastro no painel de configurações e liberar seu acesso com o papel correto.</p>
+          </div>
+          <button
+            onClick={() => setPendingApproval(false)}
+            className="text-xs text-slate-400 hover:text-slate-600 underline transition-colors"
+          >
+            Voltar ao Login
+          </button>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full flex flex-col justify-center items-center p-4 bg-slate-50 dark:bg-slate-950 transition-colors relative overflow-hidden">
@@ -286,11 +308,11 @@ export default function LoginPage() {
                   </div>
                 </div>
 
-                {/* Nota de Segurança RBAC */}
-                <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-medium flex items-start gap-2">
-                  <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
+                {/* Nota de Segurança RBAC — Pending Approval */}
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs font-medium flex items-start gap-2">
+                  <Clock className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>
-                    Novas contas são cadastradas como <strong>Operador Padrão (Consultora)</strong>. A alteração de papéis (Admin / Marketing) é realizada exclusivamente por um Administrador logado no painel de configurações.
+                    Novas contas ficam <strong>pendentes de aprovação</strong>. Um Administrador irá revisar e liberar seu acesso com o papel correto antes de você conseguir entrar no CRM.
                   </span>
                 </div>
 

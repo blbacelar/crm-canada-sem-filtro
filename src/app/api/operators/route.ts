@@ -17,24 +17,27 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = createAdminClient();
 
-    // Buscar lista de usuarios do Supabase Auth se disponivel
     const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
 
     if (!authError && authUsers?.users && authUsers.users.length > 0) {
-      const operators = authUsers.users.map((u) => ({
+      const allUsers = authUsers.users.map((u) => ({
         id: u.id,
         name: u.user_metadata?.name || u.email?.split('@')[0] || 'Operador CSF',
         email: u.email,
         role: (u.user_metadata?.role as UserRole) || 'consultant',
+        status: (u.user_metadata?.status as string) || 'active',
         created_at: u.created_at,
       }));
 
-      return NextResponse.json({ operators });
+      const operators = allUsers.filter((u) => u.status !== 'pending');
+      const pendingUsers = allUsers.filter((u) => u.status === 'pending');
+
+      return NextResponse.json({ operators, pendingUsers });
     }
 
-    return NextResponse.json({ operators: DEFAULT_OPERATORS });
+    return NextResponse.json({ operators: DEFAULT_OPERATORS, pendingUsers: [] });
   } catch (err: any) {
-    return NextResponse.json({ operators: DEFAULT_OPERATORS });
+    return NextResponse.json({ operators: DEFAULT_OPERATORS, pendingUsers: [] });
   }
 }
 
@@ -54,18 +57,22 @@ export async function POST(request: NextRequest) {
     const targetUser = authUsers?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
 
     if (targetUser) {
-      // Atualizar metadados do usuario no Supabase Auth com nova role
+      // Atribuir papel e, se for aprovação, mudar status para 'active'
+      const isApproval = action === 'approve';
       await supabase.auth.admin.updateUserById(targetUser.id, {
         user_metadata: {
           ...targetUser.user_metadata,
           role: role as UserRole,
+          ...(isApproval ? { status: 'active' } : {}),
           ...(name ? { name } : {}),
         },
       });
 
       return NextResponse.json({
         success: true,
-        message: `Papel de ${email} atualizado com sucesso para ${role.toUpperCase()} no Supabase!`,
+        message: isApproval
+          ? `Acesso de ${email} aprovado com sucesso como ${role.toUpperCase()}!`
+          : `Papel de ${email} atualizado com sucesso para ${role.toUpperCase()} no Supabase!`,
       });
     }
 

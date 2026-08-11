@@ -49,10 +49,13 @@ export default function SettingsPage() {
 
   // RBAC Operators Management State
   const [operators, setOperators] = React.useState<any[]>([]);
+  const [pendingUsers, setPendingUsers] = React.useState<any[]>([]);
   const [newOpName, setNewOpName] = React.useState<string>('');
   const [newOpEmail, setNewOpEmail] = React.useState<string>('');
   const [newOpRole, setNewOpRole] = React.useState<UserRole>('consultant');
   const [submittingOp, setSubmittingOp] = React.useState<boolean>(false);
+  const [approvingId, setApprovingId] = React.useState<string | null>(null);
+  const [pendingApprovalRoles, setPendingApprovalRoles] = React.useState<Record<string, UserRole>>({});
 
   // SLA States
   const [businessStartHour, setBusinessStartHour] = React.useState<string>('09:00');
@@ -80,6 +83,11 @@ export default function SettingsPage() {
       if (opRes.ok) {
         const json = await opRes.json();
         setOperators(json.operators || []);
+        setPendingUsers(json.pendingUsers || []);
+        // Inicializar roles para aprovacao com 'consultant' como padrão
+        const initialRoles: Record<string, UserRole> = {};
+        (json.pendingUsers || []).forEach((u: any) => { initialRoles[u.email] = 'consultant'; });
+        setPendingApprovalRoles(initialRoles);
       }
     } catch (err) {
       console.error('Erro ao carregar configurações:', err);
@@ -123,6 +131,35 @@ export default function SettingsPage() {
     await handleUpdateCommission(newProductName, parseFloat(newCommissionPercentage), true);
     setNewProductName('');
     setNewCommissionPercentage('10.0');
+  };
+
+  // Aprovar usuario pendente com papel escolhido pelo Admin
+  const handleApproveUser = async (email: string) => {
+    const selectedRole = pendingApprovalRoles[email] || 'consultant';
+    try {
+      setApprovingId(email);
+      const res = await fetch('/api/operators', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          role: selectedRole,
+          action: 'approve',
+        }),
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        setSavedSuccess(true);
+        setSuccessMessage(json.message || `Acesso de ${email} aprovado!`);
+        setTimeout(() => setSavedSuccess(false), 3000);
+        fetchSettings();
+      }
+    } catch (err) {
+      console.error('Erro ao aprovar usuario:', err);
+    } finally {
+      setApprovingId(null);
+    }
   };
 
   // Alteração de Papel pelo Administrador
@@ -278,6 +315,72 @@ export default function SettingsPage() {
 
           {/* TAB 1: GESTÃO DE OPERADORES & PAPÉIS (RBAC) */}
           <TabsContent value="operadores" className="space-y-6 m-0">
+
+            {/* Fila de Aprovação — Usuários Pendentes */}
+            {pendingUsers.length > 0 && (
+              <Card className="border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/5">
+                <CardHeader>
+                  <CardTitle className="text-base font-bold flex items-center gap-2 text-amber-700 dark:text-amber-300">
+                    <Users className="w-4 h-4" />
+                    <span>Aguardando Aprovação</span>
+                    <span className="ml-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+                      {pendingUsers.length}
+                    </span>
+                  </CardTitle>
+                  <CardDescription className="text-xs text-amber-600/80 dark:text-amber-400/80">
+                    Esses usuários criaram conta mas ainda <strong>não têm acesso ao CRM</strong>. Aprove e atribua o papel correto.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {pendingUsers.map((u: any) => (
+                    <div
+                      key={u.id || u.email}
+                      className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs"
+                    >
+                      <div className="space-y-1">
+                        <p className="font-bold text-slate-900 dark:text-slate-100 text-sm">{u.name}</p>
+                        <p className="text-slate-500 dark:text-slate-400">{u.email}</p>
+                        <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px]">
+                          ⏳ Pendente de Aprovação
+                        </Badge>
+                      </div>
+
+                      {role === 'admin' ? (
+                        <div className="flex items-center gap-3 self-end sm:self-auto">
+                          <Select
+                            value={pendingApprovalRoles[u.email] || 'consultant'}
+                            onValueChange={(val) =>
+                              setPendingApprovalRoles((prev) => ({ ...prev, [u.email]: val as UserRole }))
+                            }
+                          >
+                            <SelectTrigger className="w-[170px] h-8 text-xs font-semibold border-amber-500/30">
+                              <SelectValue placeholder="Atribuir Papel" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="admin">👑 Administradora</SelectItem>
+                              <SelectItem value="consultant">💼 Consultora</SelectItem>
+                              <SelectItem value="marketing">📊 Marketing</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            size="sm"
+                            disabled={approvingId === u.email}
+                            onClick={() => handleApproveUser(u.email)}
+                            className="bg-amber-500 hover:bg-amber-600 text-white text-xs gap-1.5 h-8 px-3"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            {approvingId === u.email ? 'Aprovando...' : 'Aprovar Acesso'}
+                          </Button>
+                        </div>
+                      ) : (
+                        <Badge variant="outline" className="text-slate-400 text-[10px]">Apenas Admin pode aprovar</Badge>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Form de Cadastro de Operador com Atribuição de Papel pelo Admin */}
             {role === 'admin' && (
               <Card className="border-red-500/20 bg-red-500/5">
