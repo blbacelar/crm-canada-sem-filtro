@@ -25,32 +25,41 @@ export async function POST(request: NextRequest) {
     });
 
     if (linkError || !data?.properties?.action_link) {
-      console.error('Erro ao gerar link de recuperação:', linkError);
+      console.error('Erro ao gerar link de recuperação:', JSON.stringify(linkError));
       // Retornar sucesso mesmo se usuário não existir (segurança — não vazar se email está cadastrado)
       return NextResponse.json({ success: true });
     }
 
     const resetLink = data.properties.action_link;
 
+    // from: usa env var RESEND_FROM_EMAIL — se não configurado usa onboarding@resend.dev (domínio verificado do Resend)
+    const fromAddress = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+
     // Enviar e-mail via Resend com template HTML premium
-    const { error: sendError } = await resend.emails.send({
-      from: 'Canadá Sem Filtro CRM <noreply@canadasemfiltro.com>',
+    const { data: sendData, error: sendError } = await resend.emails.send({
+      from: fromAddress,
       to: [email.trim()],
       subject: '🔑 Recuperação de Senha — Canadá Sem Filtro CRM',
       html: buildResetEmailHtml(resetLink, email.trim()),
     });
 
     if (sendError) {
-      console.error('Erro ao enviar e-mail via Resend:', sendError);
-      return NextResponse.json({ error: 'Falha ao enviar o e-mail. Tente novamente.' }, { status: 500 });
+      const errDetail = JSON.stringify(sendError);
+      console.error('Erro Resend:', errDetail);
+      return NextResponse.json(
+        { error: `Falha ao enviar e-mail via Resend: ${(sendError as any).message || errDetail}` },
+        { status: 500 }
+      );
     }
 
+    console.log('E-mail de recuperação enviado com sucesso. ID:', (sendData as any)?.id);
     return NextResponse.json({ success: true });
   } catch (err: any) {
     console.error('Erro inesperado:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
 
 function buildResetEmailHtml(resetLink: string, email: string): string {
   return `
