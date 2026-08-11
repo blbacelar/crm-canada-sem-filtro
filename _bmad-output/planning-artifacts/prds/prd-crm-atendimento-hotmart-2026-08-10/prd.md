@@ -1,6 +1,6 @@
 ---
 title: Canadá Sem Filtro | Central de Atendimento
-status: draft
+status: approved
 created: 2026-08-10
 updated: 2026-08-10
 ---
@@ -60,6 +60,10 @@ O primeiro release prioriza o núcleo Hotmart/CRM e a continuidade operacional. 
 ### 4.1 Clientes, compras e eventos Hotmart
 
 **Descrição:** O sistema mantém um cadastro único de Cliente e seu histórico de Compras. Todos os eventos Hotmart alteram o status atual sem apagar o histórico anterior. A integração deve aceitar repetição, atraso e falha de entrega.
+
+**Contrato obrigatório de dados:** `public.clients` é a tabela central compartilhada com o App de Diagnóstico no projeto Supabase `amkrasedammnrlzbciue`. O e-mail é a chave de negócio e deve ser persistido como `LOWER(TRIM(email))`, com índice único. `name` e `email` são obrigatórios; os demais dados Hotmart de contato e endereço (`phone`, `document`, `country`, `zip_code`, `city`, `state`, `address`, `district`, `number`, `complement`) devem ser atualizados quando presentes. Todo webhook, cadastro manual e submissão de diagnóstico usa `upsert` por e-mail; nunca um fluxo separado de leitura seguido de inserção.
+
+Eventos Hotmart que confirmam a compra também devem inserir o e-mail normalizado em `public.allowed_emails` com `ON CONFLICT (email) DO NOTHING`, liberando o acesso ao diagnóstico sem duplicar permissões.
 
 #### FR-1: Criar ou atualizar Cliente
 
@@ -124,7 +128,7 @@ Usuários autorizados devem registrar canal, data, autor, resumo, resultado e pr
 
 #### FR-14: Consultoria e comissão
 
-Usuários autorizados devem registrar solicitação, consultora, data, valor pago, status da Consultoria e Comissão, com histórico de alterações.
+Usuários autorizados devem registrar solicitação, consultora, data, valor pago, status da Consultoria e Comissão, com histórico de alterações. As taxas, porcentagens e regras de cálculo de comissão são mantidas em uma tela de configuração acessível **exclusivamente pela Administradora**.
 
 ### 4.3 Dashboard, alertas e métricas
 
@@ -136,7 +140,7 @@ O dashboard deve exibir total de Clientes, Clientes em atendimento, Diagnóstico
 
 #### FR-16: SLA configurável
 
-Administradores devem configurar o prazo para abertura/atividade do cadastro; o valor inicial é 24 horas **[ASSUMPTION: definir se conta horas corridas ou úteis]**.
+Administradores devem configurar o prazo para abertura/atividade do cadastro; o valor padrão inicial é de **24 horas úteis** (contadas exclusivamente dentro do horário de atendimento comercial).
 
 #### FR-17: Escalonamento
 
@@ -152,7 +156,7 @@ O sistema deve calcular tempo até primeiro contato, tempo até envio do Diagnó
 
 #### FR-19: Prévia de importação
 
-O sistema deve mostrar colunas reconhecidas, linhas válidas, inválidas e possíveis duplicidades antes da confirmação.
+O sistema deve mostrar colunas reconhecidas, linhas válidas, inválidas e possíveis duplicidades (usando e-mail principal como chave de deduplicação e gerando alertas pendentes para resolução da Administradora) antes da confirmação.
 
 #### FR-20: Importação histórica
 
@@ -172,7 +176,11 @@ O sistema deve permitir comparar registros manuais com Eventos Hotmart posterior
 
 #### FR-23: Roles
 
-O sistema deve suportar Administradora, Consultora, Marketing e TI, com matriz configurável de permissões **[ASSUMPTION: nomes finais das roles devem ser confirmados]**.
+O sistema deve suportar 4 perfis operacionais:
+1. **Administradora:** Acesso total a clientes, filas, reatribuição de responsáveis, alteração/configuração de comissões, gestão de SLA e auditoria.
+2. **Consultora:** Acesso aos clientes atribuídos/fila, diagnósticos, registro de interações e visualização de suas próprias comissões.
+3. **Marketing:** Acesso exclusivo a dados agregados e relatórios do dashboard (conversão, origem, volumes). Sem acesso a dados pessoais sensíveis ou diagnósticos.
+4. **TI:** Acesso a logs operacionais, webhooks, reprocessamento e reconciliação.
 
 #### FR-24: Controle de dados sensíveis
 
@@ -275,28 +283,26 @@ Em fase posterior, agentes de IA poderão responder dúvidas simples e encaminha
 - **SM-C1:** número de Interações ou e-mails enviados sem contato real. Deve ser monitorado para evitar que a equipe otimize volume em vez de atendimento efetivo.
 - **SM-C2:** incidentes de exposição ou acesso indevido a dados pessoais. Deve permanecer zero.
 
-## 9. Perguntas abertas
+## 9. Perguntas abertas e Decisões Confirmadas
 
-1. Quais são os nomes e permissões finais das roles?
-2. “Cadastro aberto” significa primeira visualização, primeiro contato registrado ou outra ação?
-3. O SLA de 24 horas conta horas corridas ou úteis, e qual é o horário de atendimento?
-4. Qual é o catálogo oficial de eventos Hotmart e quais estados cada evento pode alterar?
-5. Como deduplicar registros por e-mail, telefone, transaction code e mudanças de e-mail?
-6. Qual é a fórmula de Comissão por Produto/oferta e quem aprova correções?
-7. Quais colunas do CSV entram no modelo definitivo e quais devem ser descartadas?
-8. Como o cliente consente, consulta e solicita a retenção de conversas de WhatsApp/Instagram?
-9. Qual volume esperado de Clientes, Eventos e Interações em 12 meses?
-10. Qual prazo de implantação e quais pessoas aprovam o MVP?
-11. Qual versão dos eventos Hotmart será habilitada e onde ficará o `HOTTOK` com segurança?
-12. O plano Calendly disponível inclui webhooks e qual conta terá escopo de organização?
-13. Qual conta Meta, WABA, número, opt-in e política de templates serão usados no WhatsApp?
-14. Qual conta Instagram profissional e fluxo de permissões/App Review serão usados?
+### 9.1 Decisões Confirmadas com a Operação
+
+- **Roles & Permissões:** Matriz oficial de 4 papéis aprovada (Administradora com controle total; Consultora com acesso à sua fila/atendimentos e comissões próprias; Marketing com dados agregados/BI sem PII; TI com monitoramento técnico de webhooks/logs).
+- **SLA de 24 Horas:** O SLA é contado em **horas úteis** durante o horário de atendimento comercial da equipe.
+- **Configuração de Comissões:** As tabelas, taxas e parâmetros de cálculo de comissão ficam armazenadas em tela de configuração acessível **apenas por usuários Administradores**.
+- **Deduplicação & Identidade:** A busca primária e vinculação automática usam o e-mail do comprador Hotmart. Conflitos de identidade (ex: mesmos dados secundários com e-mail diferente) geram alertas de duplicidade pendentes para resolução manual da Administradora.
+
+### 9.2 Perguntas Técnicas / Integrações Restantes
+
+1. Qual é o catálogo oficial detalhado de eventos Hotmart e mapeamento exato de payloads para cada mudança de status?
+2. Quais colunas secundárias do CSV de 60+ colunas entram no modelo definitivo além de nome, e-mail, telefone, produto, transação e valores?
+3. Como será configurada a retenção de logs e auditoria de RLS no banco de dados Supabase/PostgreSQL?
+4. Qual versão dos webhooks Hotmart será habilitada e onde ficará o token `HOTTOK` com segurança?
+5. Qual é a janela exata de horário comercial (ex: 09:00 às 18:00 seg-sex) para o cálculo automático das horas úteis do SLA?
 
 ## 10. Índice de suposições
 
 - §0: a primeira versão será uma aplicação web interna baseada no dashboard existente.
-- FR-3: o catálogo citado de eventos Hotmart precisa ser confirmado.
-- FR-16: o prazo inicial de 24 horas ainda precisa ser classificado como horas corridas ou úteis.
-- FR-23: os nomes finais e a matriz de roles ainda precisam ser confirmados.
+- FR-3: o catálogo citado de eventos Hotmart precisa ser confirmado com a conta Hotmart.
 - NFR 5.3: o orçamento de latência precisa ser definido após medir o volume inicial.
 - §5.4: a disponibilidade, os planos e as permissões das integrações externas ainda precisam ser confirmados.
