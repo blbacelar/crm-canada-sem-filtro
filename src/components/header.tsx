@@ -19,14 +19,30 @@ interface HeaderProps {
   currentRole?: UserRole;
   onRoleChange?: (role: UserRole) => void;
   userEmail?: string;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
 }
 
 export function Header({
   currentRole = 'admin',
   onRoleChange,
   userEmail = 'admin@canadasemfiltro.com',
+  searchQuery = '',
+  onSearchChange,
 }: HeaderProps) {
   const [activeRole, setActiveRole] = React.useState<UserRole>(currentRole);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handleRoleSelect = (role: UserRole) => {
     setActiveRole(role);
@@ -44,7 +60,7 @@ export function Header({
             <Compass className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-base font-bold text-slate-900 dark:text-slate-50 leading-tight">
+            <h1 className="text-base font-bold text-slate-900 dark:text-slate-50 leading-tight cursor-pointer" onClick={() => window.location.href = '/'}>
               Canadá Sem Filtro
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
@@ -58,7 +74,10 @@ export function Header({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
             <Input
+              ref={inputRef}
               type="text"
+              value={searchQuery}
+              onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
               placeholder="Pesquisar cliente, e-mail ou transação... (Cmd + K)"
               className="pl-9"
             />

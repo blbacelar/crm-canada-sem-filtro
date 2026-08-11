@@ -310,7 +310,12 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50 transition-colors">
-      <Header currentRole={role} onRoleChange={setRole} />
+      <Header
+        currentRole={role}
+        onRoleChange={setRole}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+      />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Metric Cards Banner using shadcn Card Component */}
