@@ -51,11 +51,16 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
-        redirectTo: `${window.location.origin}/login`,
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail.trim() }),
       });
-      if (resetError) {
-        setError(resetError.message || 'Erro ao enviar e-mail de recuperação.');
+
+      const json = await res.json();
+
+      if (!res.ok || json.error) {
+        setError(json.error || 'Erro ao enviar e-mail de recuperação.');
       } else {
         setResetSent(true);
       }
