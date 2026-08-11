@@ -80,7 +80,12 @@ export function encryptClientRecord<T extends Record<string, any>>(client: T): T
   return {
     ...client,
     document: encryptSensitive(client.document),
+    country: encryptSensitive(client.country),
+    zip_code: encryptSensitive(client.zip_code),
+    city: encryptSensitive(client.city),
+    state: encryptSensitive(client.state),
     address: encryptSensitive(client.address),
+    district: encryptSensitive(client.district),
     number: encryptSensitive(client.number),
     complement: encryptSensitive(client.complement),
   };
@@ -94,7 +99,12 @@ export function decryptClientRecord<T extends Record<string, any>>(client: T): T
   return {
     ...client,
     document: decryptSensitive(client.document),
+    country: decryptSensitive(client.country),
+    zip_code: decryptSensitive(client.zip_code),
+    city: decryptSensitive(client.city),
+    state: decryptSensitive(client.state),
     address: decryptSensitive(client.address),
+    district: decryptSensitive(client.district),
     number: decryptSensitive(client.number),
     complement: decryptSensitive(client.complement),
   };

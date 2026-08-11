@@ -732,17 +732,35 @@ export default function HomePage() {
                         </div>
                         <div>
                           <span className="text-slate-400">País:</span>
-                          <p className="font-medium text-slate-900 dark:text-slate-100">{selectedClient.country || 'Brasil'}</p>
+                          <p className="font-medium text-slate-900 dark:text-slate-100">
+                            {revealSensitiveData
+                              ? selectedClient.country || 'Brasil'
+                              : selectedClient.country
+                              ? '••••••••'
+                              : 'Brasil'}
+                          </p>
                         </div>
                         <div>
                           <span className="text-slate-400">Cidade / UF:</span>
                           <p className="font-medium text-slate-900 dark:text-slate-100">
-                            {selectedClient.city ? `${selectedClient.city} - ${selectedClient.state}` : 'Não informado'}
+                            {revealSensitiveData
+                              ? selectedClient.city
+                                ? `${selectedClient.city} - ${selectedClient.state}`
+                                : 'Não informado'
+                              : selectedClient.city
+                              ? '••••••••••••'
+                              : 'Não informado'}
                           </p>
                         </div>
                         <div>
                           <span className="text-slate-400">CEP / Zip Code:</span>
-                          <p className="font-medium text-slate-900 dark:text-slate-100">{selectedClient.zip_code || 'Não informado'}</p>
+                          <p className="font-medium text-slate-900 dark:text-slate-100">
+                            {revealSensitiveData
+                              ? selectedClient.zip_code || 'Não informado'
+                              : selectedClient.zip_code
+                              ? '••••••••'
+                              : 'Não informado'}
+                          </p>
                         </div>
                         <div className="col-span-2">
                           <span className="text-slate-400">Logradouro / Endereço:</span>
@@ -759,7 +777,11 @@ export default function HomePage() {
                         {selectedClient.district && (
                           <div className="col-span-2">
                             <span className="text-slate-400">Bairro / District:</span>
-                            <p className="font-medium text-slate-900 dark:text-slate-100">{selectedClient.district}</p>
+                            <p className="font-medium text-slate-900 dark:text-slate-100">
+                              {revealSensitiveData
+                                ? selectedClient.district
+                                : '••••••••••••'}
+                            </p>
                           </div>
                         )}
                       </div>
