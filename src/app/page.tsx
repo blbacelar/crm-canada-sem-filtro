@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   AlertCircle,
   ChevronRight,
+  ChevronLeft,
   Shield,
 } from 'lucide-react';
 import { UserRole, JourneyState } from '@/types/database.types';
@@ -153,35 +154,34 @@ export default function HomePage() {
       const res = await fetch('/api/clients');
       if (res.ok) {
         const json = await res.json();
-        if (json.clients && json.clients.length > 0) {
-          const apiClients: MockClient[] = json.clients.map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            email: c.email,
-            phone: c.phone || 'Não informado',
-            document: c.document,
-            country: c.country,
-            zip_code: c.zip_code,
-            city: c.city,
-            state: c.state,
-            address: c.address,
-            district: c.district,
-            number: c.number,
-            complement: c.complement,
-            product: '7 Vídeo Aulas + E-book + Diário de Bordo + Diagnóstico',
-            status_journey: c.status_journey || 'compra',
-            sla_hours_left: c.sla_hours_left ?? 24,
-            is_overdue: !!c.is_overdue,
-            assigned_consultant: c.assigned_consultant_id ? 'Consultora Designada' : 'Pendente',
-            purchase_date: c.created_at,
-            price_gross: 490.0,
-            price_net: 441.0,
-            diagnostic_status: c.status_journey === 'compra' ? 'pendente' : 'enviado',
-            days_since_purchase: Math.floor((Date.now() - new Date(c.created_at).getTime()) / (1000 * 60 * 60 * 24)),
-            commission_amount: 44.1,
-          }));
-          setClients(apiClients);
-        }
+        const rawList = json.clients || [];
+        const apiClients: MockClient[] = rawList.map((c: any) => ({
+          id: c.id,
+          name: c.name || 'Cliente Sem Nome',
+          email: c.email || '',
+          phone: c.phone || 'Não informado',
+          document: c.document,
+          country: c.country,
+          zip_code: c.zip_code,
+          city: c.city,
+          state: c.state,
+          address: c.address,
+          district: c.district,
+          number: c.number,
+          complement: c.complement,
+          product: '7 Vídeo Aulas + E-book + Diário de Bordo + Diagnóstico',
+          status_journey: (c.status_journey || 'compra') as JourneyState,
+          sla_hours_left: typeof c.sla_hours_left === 'number' ? c.sla_hours_left : 24,
+          is_overdue: !!c.is_overdue,
+          assigned_consultant: c.assigned_consultant_id ? 'Consultora Designada' : 'Pendente',
+          purchase_date: c.created_at || new Date().toISOString(),
+          price_gross: 490.0,
+          price_net: 441.0,
+          diagnostic_status: c.status_journey === 'compra' ? 'pendente' : 'enviado',
+          days_since_purchase: c.created_at ? Math.floor((Date.now() - new Date(c.created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0,
+          commission_amount: 44.1,
+        }));
+        setClients(apiClients);
       }
     } catch (err) {
       console.error('Erro ao carregar clientes:', err);
@@ -218,16 +218,33 @@ export default function HomePage() {
 
   const overdueCount = clients.filter((c) => c.is_overdue).length;
 
+  // Paginacao Dinamica
+  const [currentPage, setCurrentPage] = React.useState<number>(1);
+  const [pageSize, setPageSize] = React.useState<number>(10);
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, searchQuery, pageSize]);
+
   const filteredClients = clients.filter((client) => {
+    if (!client) return false;
+    const name = client.name || '';
+    const email = client.email || '';
+    const product = client.product || '';
     const matchesSearch =
-      client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      client.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      client.product.toLowerCase().includes(searchQuery.toLowerCase());
+      name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      product.toLowerCase().includes(searchQuery.toLowerCase());
 
     if (statusFilter === 'overdue') return matchesSearch && client.is_overdue;
     if (statusFilter !== 'todos') return matchesSearch && client.status_journey === statusFilter;
     return matchesSearch;
   });
+
+  const totalPages = Math.ceil(filteredClients.length / pageSize) || 1;
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, filteredClients.length);
+  const paginatedClients = filteredClients.slice(startIndex, startIndex + pageSize);
 
   const handleStateChange = (clientId: string, newState: JourneyState) => {
     setClients((prev) =>
@@ -421,16 +438,6 @@ export default function HomePage() {
           <div className="flex items-center gap-2 self-end sm:self-auto">
             {role === 'admin' && (
               <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowCommissionModal(true)}
-                  className="gap-1.5 border-purple-500/30 text-purple-600 dark:text-purple-400 hover:bg-purple-500/10"
-                >
-                  <Shield className="w-3.5 h-3.5" />
-                  <span>Regras de Comissão</span>
-                </Button>
-
                 {pendingDuplicates.length > 0 && (
                   <Button
                     variant="destructive"
@@ -450,7 +457,7 @@ export default function HomePage() {
               className="gap-1.5"
             >
               <Plus className="w-4 h-4" />
-              <span>+ Novo Cliente Manual</span>
+              <span>Novo Cliente Manual</span>
             </Button>
           </div>
         </div>
@@ -479,51 +486,106 @@ export default function HomePage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredClients.map((client) => {
-                const labelInfo = JOURNEY_LABELS[client.status_journey];
-                return (
-                  <TableRow
-                    key={client.id}
-                    onClick={() => setSelectedClient(client)}
-                    className={client.is_overdue ? 'border-l-4 border-l-red-500 bg-red-500/5' : ''}
-                  >
-                    <TableCell>
-                      <span className={`px-2.5 py-1 rounded-full font-semibold text-[11px] inline-flex items-center gap-1 ${labelInfo.bg} ${labelInfo.text}`}>
-                        {labelInfo.label}
-                      </span>
-                    </TableCell>
-                    <TableCell className="font-medium text-slate-900 dark:text-slate-100">
-                      <div>{client.name}</div>
-                      <div className="text-[11px] text-slate-400">{client.email}</div>
-                    </TableCell>
-                    <TableCell className="text-slate-600 dark:text-slate-300">
-                      {client.product}
-                    </TableCell>
-                    <TableCell>
-                      {client.is_overdue ? (
-                        <span className="font-bold text-red-600 dark:text-red-400 flex items-center gap-1">
-                          <AlertTriangle className="w-3.5 h-3.5" /> ESTOURADO!
+              {paginatedClients.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-slate-500 text-xs font-medium">
+                    Nenhum cliente encontrado com os filtros selecionados.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginatedClients.map((client) => {
+                  const labelInfo = JOURNEY_LABELS[client.status_journey];
+                  return (
+                    <TableRow
+                      key={client.id}
+                      onClick={() => setSelectedClient(client)}
+                      className={client.is_overdue ? 'border-l-4 border-l-red-500 bg-red-500/5' : ''}
+                    >
+                      <TableCell>
+                        <span className={`px-2.5 py-1 rounded-full font-semibold text-[11px] inline-flex items-center gap-1 ${labelInfo.bg} ${labelInfo.text}`}>
+                          {labelInfo.label}
                         </span>
-                      ) : (
-                        <span className="text-slate-600 dark:text-slate-400 font-medium">
-                          {client.sla_hours_left}h úteis restantes
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-slate-600 dark:text-slate-300 font-medium">
-                      {client.assigned_consultant}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="secondary" size="sm" className="gap-1">
-                        <span>Ver Ficha</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+                      </TableCell>
+                      <TableCell className="font-medium text-slate-900 dark:text-slate-100">
+                        <div>{client.name}</div>
+                        <div className="text-[11px] text-slate-400">{client.email}</div>
+                      </TableCell>
+                      <TableCell className="text-slate-600 dark:text-slate-300">
+                        {client.product}
+                      </TableCell>
+                      <TableCell>
+                        {client.is_overdue ? (
+                          <span className="font-bold text-red-600 dark:text-red-400 flex items-center gap-1">
+                            <AlertTriangle className="w-3.5 h-3.5" /> ESTOURADO!
+                          </span>
+                        ) : (
+                          <span className="text-slate-600 dark:text-slate-400 font-medium">
+                            {client.sla_hours_left}h úteis restantes
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-slate-600 dark:text-slate-300 font-medium">
+                        {client.assigned_consultant}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="secondary" size="sm" className="gap-1">
+                          <span>Ver Ficha</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
             </TableBody>
           </Table>
+
+          {/* Barra Dinâmica de Paginação */}
+          <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
+            <div className="flex items-center gap-3">
+              <span className="text-slate-500 dark:text-slate-400 font-medium">Itens por página:</span>
+              <Select value={String(pageSize)} onValueChange={(val) => setPageSize(Number(val))}>
+                <SelectTrigger className="h-8 w-20 text-xs font-semibold">
+                  <SelectValue placeholder="10" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="text-slate-500 dark:text-slate-400">
+                Exibindo <strong>{filteredClients.length === 0 ? 0 : startIndex + 1}</strong> - <strong>{endIndex}</strong> de <strong>{filteredClients.length}</strong> clientes
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                className="gap-1"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Anterior</span>
+              </Button>
+              <span className="text-slate-600 dark:text-slate-300 font-bold px-2">
+                Página {currentPage} de {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                className="gap-1"
+              >
+                <span>Próximo</span>
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </Card>
       </main>
 
@@ -795,7 +857,7 @@ export default function HomePage() {
       <Dialog open={showManualModal} onOpenChange={setShowManualModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>+ Novo Cliente Manual (Contingência)</DialogTitle>
+            <DialogTitle>Novo Cliente Manual (Contingência)</DialogTitle>
           </DialogHeader>
 
           <form onSubmit={handleCreateManualClient} className="space-y-3 text-xs">
