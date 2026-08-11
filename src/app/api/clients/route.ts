@@ -9,18 +9,24 @@ export async function GET(request: NextRequest) {
 
     const { data: clients, error } = await (supabase as any)
       .from('clients')
-      .select('*')
+      .select('*, purchases(*)')
       .order('created_at', { ascending: false });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Enriquecer dados de clientes com o cálculo em tempo real do SLA em horas úteis
+    // Enriquecer dados de clientes com o cálculo em tempo real do SLA em horas úteis e dados de compras
     const enrichedClients = ((clients || []) as any[]).map((client) => {
       const slaResult = calculateBusinessHoursSLA(client.created_at || new Date().toISOString(), 24);
+      const purchase = Array.isArray(client.purchases) && client.purchases.length > 0 ? client.purchases[0] : null;
+
       return {
         ...client,
+        product_name: purchase?.product_name || '7 Vídeo Aulas + E-book + Diário de Bordo + Diagnóstico',
+        price_gross: purchase?.price_gross ? Number(purchase.price_gross) : 197.00,
+        price_net: purchase?.price_net ? Number(purchase.price_net) : 169.20,
+        purchase_date: purchase?.purchase_date || client.created_at,
         sla_hours_left: slaResult.businessHoursRemaining,
         is_overdue: client.status_journey === 'compra' && slaResult.isOverdue,
       };

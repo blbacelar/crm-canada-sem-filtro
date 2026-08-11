@@ -169,17 +169,17 @@ export default function HomePage() {
           district: c.district,
           number: c.number,
           complement: c.complement,
-          product: '7 Vídeo Aulas + E-book + Diário de Bordo + Diagnóstico',
+          product: c.product_name || '7 Vídeo Aulas + E-book + Diário de Bordo + Diagnóstico',
           status_journey: (c.status_journey || 'compra') as JourneyState,
           sla_hours_left: typeof c.sla_hours_left === 'number' ? c.sla_hours_left : 24,
           is_overdue: !!c.is_overdue,
           assigned_consultant: c.assigned_consultant_id ? 'Consultora Designada' : 'Pendente',
-          purchase_date: c.created_at || new Date().toISOString(),
-          price_gross: 490.0,
-          price_net: 441.0,
+          purchase_date: c.purchase_date || c.created_at || new Date().toISOString(),
+          price_gross: typeof c.price_gross === 'number' ? c.price_gross : 197.0,
+          price_net: typeof c.price_net === 'number' ? c.price_net : 169.20,
           diagnostic_status: c.status_journey === 'compra' ? 'pendente' : 'enviado',
           days_since_purchase: c.created_at ? Math.floor((Date.now() - new Date(c.created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0,
-          commission_amount: 44.1,
+          commission_amount: (typeof c.price_net === 'number' ? c.price_net : 169.20) * 0.1,
         }));
         setClients(apiClients);
         // Atualizar o cliente atualmente aberto no drawer com os dados mais recentes do Supabase
