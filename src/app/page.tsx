@@ -151,7 +151,7 @@ export default function HomePage() {
   const fetchClientsFromApi = React.useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/clients');
+      const res = await fetch('/api/clients', { cache: 'no-store' });
       if (res.ok) {
         const json = await res.json();
         const rawList = json.clients || [];
