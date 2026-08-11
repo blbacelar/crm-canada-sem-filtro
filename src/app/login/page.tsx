@@ -34,13 +34,37 @@ export default function LoginPage() {
   const [confirmPassword, setConfirmPassword] = React.useState('');
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
+  const [showLoginPassword, setShowLoginPassword] = React.useState(false);
   // Status & Error
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [success, setSuccess] = React.useState('');
   const [pendingApproval, setPendingApproval] = React.useState(false);
+  const [forgotPassword, setForgotPassword] = React.useState(false);
+  const [resetEmail, setResetEmail] = React.useState('');
+  const [resetSent, setResetSent] = React.useState(false);
 
   const supabase = createClient();
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
+        redirectTo: `${window.location.origin}/login`,
+      });
+      if (resetError) {
+        setError(resetError.message || 'Erro ao enviar e-mail de recuperação.');
+      } else {
+        setResetSent(true);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Ocorreu um erro.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,6 +193,82 @@ export default function LoginPage() {
     );
   }
 
+  // Tela de Recuperação de Senha
+  if (forgotPassword) {
+    return (
+      <div className="min-h-screen w-full flex flex-col justify-center items-center p-4 bg-slate-50 dark:bg-slate-950 transition-colors relative overflow-hidden">
+        <div className="absolute top-4 right-4 z-10"><ThemeToggle /></div>
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+        <Card className="w-full max-w-md p-4 shadow-2xl border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95">
+          <CardHeader className="text-center pb-2">
+            <div className="w-12 h-12 rounded-xl bg-red-600 mx-auto flex items-center justify-center shadow-lg shadow-red-600/30 mb-3">
+              <Compass className="w-6 h-6 text-white" />
+            </div>
+            <CardTitle className="text-xl font-bold text-slate-900 dark:text-slate-50">Recuperar Senha</CardTitle>
+            <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
+              Informe seu e-mail e enviaremos um link para criar uma nova senha.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {error && (
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+            {resetSent ? (
+              <div className="space-y-4 text-center">
+                <div className="w-14 h-14 rounded-full bg-emerald-500/10 border-2 border-emerald-500/30 mx-auto flex items-center justify-center">
+                  <CheckCircle2 className="w-7 h-7 text-emerald-500" />
+                </div>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">E-mail enviado com sucesso!</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Verifique a caixa de entrada de <strong>{resetEmail}</strong> e siga as instruções para redefinir sua senha.
+                </p>
+                <button
+                  onClick={() => { setForgotPassword(false); setResetSent(false); setError(''); }}
+                  className="text-xs text-red-500 hover:text-red-700 font-semibold underline transition-colors"
+                >
+                  Voltar ao Login
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+                    E-mail Cadastrado
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
+                    <Input
+                      type="email"
+                      required
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      placeholder="seu.email@canadasemfiltro.com"
+                      className="pl-9"
+                    />
+                  </div>
+                </div>
+                <Button type="submit" disabled={loading} className="w-full gap-2 group">
+                  {loading ? <span>Enviando...</span> : <><span>Enviar Link de Recuperação</span><ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></>}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => { setForgotPassword(false); setError(''); }}
+                  className="w-full text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline transition-colors"
+                >
+                  Cancelar — Voltar ao Login
+                </button>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen w-full flex flex-col justify-center items-center p-4 bg-slate-50 dark:bg-slate-950 transition-colors relative overflow-hidden">
       {/* Top right theme toggle */}
@@ -241,19 +341,37 @@ export default function LoginPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
-                    Senha
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                      Senha
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => { setForgotPassword(true); setResetEmail(email); setError(''); setSuccess(''); }}
+                      className="text-[11px] text-red-500 hover:text-red-700 dark:hover:text-red-400 font-medium transition-colors"
+                    >
+                      Esqueceu sua senha?
+                    </button>
+                  </div>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
                     <Input
-                      type="password"
+                      type={showLoginPassword ? 'text' : 'password'}
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="pl-9"
+                      className="pl-9 pr-10"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowLoginPassword((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors z-10"
+                      tabIndex={-1}
+                      aria-label={showLoginPassword ? 'Ocultar senha' : 'Ver senha'}
+                    >
+                      {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
 
