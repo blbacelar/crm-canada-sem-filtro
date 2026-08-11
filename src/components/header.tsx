@@ -86,23 +86,6 @@ export function Header({
 
         {/* Right Action Tools */}
         <div className="flex items-center gap-3">
-          {/* Role Simulator using shadcn Select Component */}
-          <div className="hidden lg:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 text-xs">
-            <Shield className="w-3.5 h-3.5 text-red-500" />
-            <span className="text-slate-500 dark:text-slate-400 font-medium">Role:</span>
-            <Select value={activeRole} onValueChange={(val) => handleRoleSelect(val as UserRole)}>
-              <SelectTrigger className="h-7 w-[140px] bg-transparent border-0 shadow-none focus:ring-0 p-0 text-xs font-semibold">
-                <SelectValue placeholder="Selecione Role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="admin">Administradora</SelectItem>
-                <SelectItem value="consultant">Consultora</SelectItem>
-                <SelectItem value="marketing">Marketing</SelectItem>
-                <SelectItem value="tech">TI / Suporte</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
           {/* Analytics BI Button */}
           {['admin', 'marketing', 'tech'].includes(activeRole) && (
             <Button
