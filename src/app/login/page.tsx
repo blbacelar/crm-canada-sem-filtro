@@ -12,6 +12,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Input } from '@/components/ui/input';
@@ -29,6 +31,9 @@ export default function LoginPage() {
   const [name, setName] = React.useState('');
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
+  const [confirmPassword, setConfirmPassword] = React.useState('');
+  const [showPassword, setShowPassword] = React.useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
   // Status & Error
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -89,6 +94,18 @@ export default function LoginPage() {
 
     if (!name.trim()) {
       setError('Por favor, informe seu nome completo.');
+      setLoading(false);
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('As senhas não coincidem. Verifique e tente novamente.');
+      setLoading(false);
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('A senha deve ter no mínimo 6 caracteres.');
       setLoading(false);
       return;
     }
@@ -183,7 +200,7 @@ export default function LoginPage() {
                 Entrar no CRM
               </TabsTrigger>
               <TabsTrigger value="register" className="text-xs font-semibold">
-                Novo Usuário & Papel
+                Novo Usuário
               </TabsTrigger>
             </TabsList>
 
@@ -297,15 +314,69 @@ export default function LoginPage() {
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
                     <Input
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       required
                       minLength={6}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Crie uma senha (mínimo 6 caracteres)"
-                      className="pl-9"
+                      className="pl-9 pr-10"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors z-10"
+                      tabIndex={-1}
+                      aria-label={showPassword ? 'Ocultar senha' : 'Ver senha'}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+                    Confirmar Senha
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
+                    <Input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      required
+                      minLength={6}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Repita a senha criada acima"
+                      className={`pl-9 pr-10 ${
+                        confirmPassword && password !== confirmPassword
+                          ? 'border-red-500 focus-visible:ring-red-500'
+                          : confirmPassword && password === confirmPassword
+                          ? 'border-emerald-500 focus-visible:ring-emerald-500'
+                          : ''
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors z-10"
+                      tabIndex={-1}
+                      aria-label={showConfirmPassword ? 'Ocultar senha' : 'Ver senha'}
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {/* Feedback visual de validação em tempo real */}
+                  {confirmPassword && (
+                    <p className={`mt-1 text-[11px] font-medium flex items-center gap-1 ${
+                      password === confirmPassword ? 'text-emerald-600' : 'text-red-500'
+                    }`}>
+                      {password === confirmPassword ? (
+                        <><CheckCircle2 className="w-3 h-3" /> Senhas coincidem</>
+                      ) : (
+                        <><AlertCircle className="w-3 h-3" /> Senhas não coincidem</>
+                      )}
+                    </p>
+                  )}
                 </div>
 
                 {/* Nota de Segurança RBAC — Pending Approval */}
