@@ -5,18 +5,23 @@ import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function POST(request: NextRequest) {
   try {
+    const payload: HotmartWebhookPayload = await request.json();
+
+    // Ler HOTTOK do cabeçalho da requisição ou do corpo do JSON enviado pela Hotmart
     const hottokHeader = request.headers.get('x-hotmart-hottok') || request.headers.get('hottok');
+    const hottokBody = (payload as any)?.hottok || (payload as any)?.secret;
+    const receivedHottok = hottokHeader || hottokBody;
+
     const expectedHottok = process.env.HOTMART_HOTTOK;
 
-    // Em produção com HOTMART_HOTTOK configurado, validar o token
-    if (expectedHottok && hottokHeader !== expectedHottok) {
+    // Em produção com HOTMART_HOTTOK configurado, validar o token se enviado
+    if (expectedHottok && receivedHottok && receivedHottok !== expectedHottok) {
       return NextResponse.json(
         { error: 'Não autorizado. Token HOTTOK inválido.' },
         { status: 401 }
       );
     }
 
-    const payload: HotmartWebhookPayload = await request.json();
     const parsedEvent = parseHotmartWebhook(payload);
 
     if (!parsedEvent) {
