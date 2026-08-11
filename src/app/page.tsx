@@ -20,6 +20,8 @@ import {
   Shield,
   Eye,
   EyeOff,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { UserRole, JourneyState } from '@/types/database.types';
 import { Button } from '@/components/ui/button';
@@ -124,6 +126,14 @@ export default function HomePage() {
   const [manualPhone, setManualPhone] = React.useState('');
   const [manualProduct, setManualProduct] = React.useState('7 Vídeo Aulas + E-book + Diário de Bordo + Diagnóstico');
   const [revealSensitiveData, setRevealSensitiveData] = React.useState(false);
+  const [copiedField, setCopiedField] = React.useState<string | null>(null);
+
+  const handleCopy = (text: string, fieldName: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedField(fieldName);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
 
   // Buscar duplicidades e regras de comissão para Admin
   const fetchAdminData = React.useCallback(async () => {
@@ -620,8 +630,44 @@ export default function HomePage() {
                 <SheetTitle className="text-xl font-bold">
                   {selectedClient.name}
                 </SheetTitle>
-                <SheetDescription className="text-xs text-slate-500 dark:text-slate-400">
-                  {selectedClient.email} • {selectedClient.phone}
+                <SheetDescription className="text-xs text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-2 mt-1">
+                  {/* Email Box com Copiar */}
+                  <span className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 font-medium">
+                    <span>{selectedClient.email}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(selectedClient.email, 'email')}
+                      className="p-0.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-100 transition-colors"
+                      title="Copiar E-mail"
+                      aria-label="Copiar E-mail"
+                    >
+                      {copiedField === 'email' ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-500 animate-in fade-in" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </span>
+
+                  {/* Phone Box com Copiar */}
+                  {selectedClient.phone && (
+                    <span className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 font-medium">
+                      <span>{selectedClient.phone}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(selectedClient.phone, 'phone')}
+                        className="p-0.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-100 transition-colors"
+                        title="Copiar Telefone"
+                        aria-label="Copiar Telefone"
+                      >
+                        {copiedField === 'phone' ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-500 animate-in fade-in" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </span>
+                  )}
                 </SheetDescription>
               </SheetHeader>
 
