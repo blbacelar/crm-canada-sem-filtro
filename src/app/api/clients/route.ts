@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { calculateBusinessHoursSLA } from '@/lib/sla';
-import { normalizedClientIdentity } from '@/lib/normalize-client';
+import { normalizedClientIdentity, formatPhoneWithDDI } from '@/lib/normalize-client';
 import { decryptClientRecord, encryptClientRecord } from '@/lib/crypto';
 
 export const dynamic = 'force-dynamic';
@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
 
       return {
         ...client,
+        phone: formatPhoneWithDDI(client.phone),
         product_name: purchase?.product_name || '7 Vídeo Aulas + E-book + Diário de Bordo + Diagnóstico',
         price_gross: purchase?.price_gross ? Number(purchase.price_gross) : 197.00,
         price_net: purchase?.price_net ? Number(purchase.price_net) : 169.20,

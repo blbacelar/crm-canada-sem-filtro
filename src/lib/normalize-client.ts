@@ -2,6 +2,23 @@ export function normalizeClientEmail(value: string) {
   return value.trim().toLowerCase();
 }
 
+export function formatPhoneWithDDI(phone: string | null | undefined): string | null {
+  if (!phone || typeof phone !== 'string') return null;
+  const cleaned = phone.trim();
+  if (!cleaned) return null;
+
+  if (cleaned.startsWith('+')) return cleaned;
+
+  const digits = cleaned.replace(/[^0-9]/g, '');
+  if (!digits) return cleaned;
+
+  if (digits.startsWith('55') && digits.length >= 12) {
+    return `+${digits}`;
+  }
+
+  return `+55${digits}`;
+}
+
 export function normalizedClientIdentity(input: {
   name: string;
   email: string;
@@ -21,7 +38,7 @@ export function normalizedClientIdentity(input: {
   return {
     name: input.name.trim(),
     email: normalizeClientEmail(input.email),
-    ...(input.phone ? { phone: input.phone.trim() } : {}),
+    ...(input.phone ? { phone: formatPhoneWithDDI(input.phone) } : {}),
     ...(input.document ? { document: input.document.trim() } : {}),
     ...(input.country ? { country: input.country.trim() } : {}),
     ...(input.zip_code ? { zip_code: input.zip_code.trim() } : {}),
