@@ -100,7 +100,15 @@ const JOURNEY_LABELS: Record<JourneyState, { label: string; bg: string; text: st
 
 export default function HomePage() {
   const [role, setRole] = React.useState<UserRole>('admin');
+  const [userEmail, setUserEmail] = React.useState<string>('admin@canadasemfiltro.com');
   const [clients, setClients] = React.useState<MockClient[]>([]);
+
+  React.useEffect(() => {
+    const storedRole = localStorage.getItem('crm_user_role') as UserRole;
+    const storedEmail = localStorage.getItem('crm_user_email');
+    if (storedRole) setRole(storedRole);
+    if (storedEmail) setUserEmail(storedEmail);
+  }, []);
   const [selectedClient, setSelectedClient] = React.useState<MockClient | null>(null);
   const [statusFilter, setStatusFilter] = React.useState<string>('todos');
   const [searchQuery, setSearchQuery] = React.useState<string>('');
@@ -331,6 +339,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50 transition-colors">
       <Header
         currentRole={role}
+        userEmail={userEmail}
         onRoleChange={setRole}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}

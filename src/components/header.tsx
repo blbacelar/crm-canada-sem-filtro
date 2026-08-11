@@ -139,23 +139,33 @@ export function Header({
           {/* Theme Toggle */}
           <ThemeToggle />
 
-          {/* User Profile / Logout Button */}
+          {/* User Profile & Active Role Badge / Logout Button */}
           <div className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-800">
+            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200">
+              <span className="text-slate-400">Role:</span>
+              <span className="text-red-600 dark:text-red-400 capitalize">
+                {activeRole === 'admin' ? 'Administradora' : activeRole === 'consultant' ? 'Consultora' : 'Marketing'}
+              </span>
+            </div>
+
             <div
               className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-700 dark:text-slate-300 font-semibold text-xs border border-slate-300 dark:border-slate-700"
               title={userEmail}
             >
               <User className="w-4 h-4" />
             </div>
+
             <Button
               variant="ghost"
               size="icon"
               onClick={() => {
+                localStorage.removeItem('crm_user_role');
+                localStorage.removeItem('crm_user_email');
                 window.location.href = '/login';
               }}
               title="Encerrar Sessão"
             >
-              <LogOut className="w-4 h-4 text-slate-400 hover:text-red-500" />
+              <LogOut className="w-4 h-4 text-slate-400 hover:text-red-500 transition-colors" />
             </Button>
           </div>
         </div>
