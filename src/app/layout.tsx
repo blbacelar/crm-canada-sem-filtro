@@ -5,6 +5,15 @@ import { Providers } from './providers';
 export const metadata: Metadata = {
   title: 'Canadá Sem Filtro | Central de Atendimento CRM',
   description: 'Sistema operacional interno para gestão de jornada de clientes, diagnósticos, consultorias e comissões.',
+  icons: {
+    icon: [
+      { url: '/favicon.png', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/favicon.png', type: 'image/png' },
+    ],
+    shortcut: '/favicon.png',
+  },
 };
 
 export default function RootLayout({
