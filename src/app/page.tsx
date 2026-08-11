@@ -18,6 +18,8 @@ import {
   ChevronRight,
   ChevronLeft,
   Shield,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { UserRole, JourneyState } from '@/types/database.types';
 import { Button } from '@/components/ui/button';
@@ -121,6 +123,7 @@ export default function HomePage() {
   const [manualEmail, setManualEmail] = React.useState('');
   const [manualPhone, setManualPhone] = React.useState('');
   const [manualProduct, setManualProduct] = React.useState('7 Vídeo Aulas + E-book + Diário de Bordo + Diagnóstico');
+  const [revealSensitiveData, setRevealSensitiveData] = React.useState(false);
 
   // Buscar duplicidades e regras de comissão para Admin
   const fetchAdminData = React.useCallback(async () => {
@@ -687,13 +690,41 @@ export default function HomePage() {
 
                     {/* Card de Endereço e Cadastro Completo (Hotmart Buyer Data) */}
                     <Card className="p-4 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 space-y-3">
-                      <h3 className="text-xs font-bold text-red-500 uppercase tracking-wider flex items-center gap-1.5">
-                        <Filter className="w-3.5 h-3.5" /> Endereço & Cadastro do Comprador (Hotmart)
-                      </h3>
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-bold text-red-500 uppercase tracking-wider flex items-center gap-1.5">
+                          <Filter className="w-3.5 h-3.5" /> Endereço & Cadastro do Comprador (Hotmart)
+                        </h3>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setRevealSensitiveData(!revealSensitiveData)}
+                          className="h-7 px-2.5 text-xs border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 gap-1.5 font-medium transition-all"
+                          title={revealSensitiveData ? "Ocultar Dados PII" : "Revelar Dados Sensíveis (PIPEDA)"}
+                        >
+                          {revealSensitiveData ? (
+                            <>
+                              <EyeOff className="w-3.5 h-3.5 text-red-500" />
+                              <span>Ocultar PII</span>
+                            </>
+                          ) : (
+                            <>
+                              <Eye className="w-3.5 h-3.5 text-blue-500" />
+                              <span>Revelar Dados</span>
+                            </>
+                          )}
+                        </Button>
+                      </div>
+
                       <div className="grid grid-cols-2 gap-3 text-xs">
                         <div>
                           <span className="text-slate-400">CPF / Documento:</span>
-                          <p className="font-medium text-slate-900 dark:text-slate-100">{selectedClient.document || 'Não informado'}</p>
+                          <p className="font-medium text-slate-900 dark:text-slate-100">
+                            {revealSensitiveData
+                              ? selectedClient.document || 'Não informado'
+                              : selectedClient.document
+                              ? '•••••••••••'
+                              : 'Não informado'}
+                          </p>
                         </div>
                         <div>
                           <span className="text-slate-400">País:</span>
@@ -712,7 +743,13 @@ export default function HomePage() {
                         <div className="col-span-2">
                           <span className="text-slate-400">Logradouro / Endereço:</span>
                           <p className="font-medium text-slate-900 dark:text-slate-100">
-                            {selectedClient.address ? `${selectedClient.address}, Nº ${selectedClient.number || 'S/N'}${selectedClient.complement ? ` (${selectedClient.complement})` : ''}` : 'Não informado'}
+                            {revealSensitiveData
+                              ? selectedClient.address
+                                ? `${selectedClient.address}, Nº ${selectedClient.number || 'S/N'}${selectedClient.complement ? ` (${selectedClient.complement})` : ''}`
+                                : 'Não informado'
+                              : selectedClient.address
+                              ? '••••••••••••••••••••••••••••••••'
+                              : 'Não informado'}
                           </p>
                         </div>
                         {selectedClient.district && (

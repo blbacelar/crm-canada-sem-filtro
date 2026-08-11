@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 
 // Utilizar a chave do ambiente ou derivar uma chave de 256 bits segura
-const SECRET = process.env.ENCRYPTION_KEY || process.env.HOTMART_HOTTOK || 'canada-sem-filtro-crm-secret-key-2026-pgp';
+const SECRET = process.env.ENCRYPTION_KEY || 'canada-sem-filtro-crm-secret-key-2026-pgp';
 const ALGORITHM = 'aes-256-gcm';
 
 // Derivar uma chave exata de 32 bytes usando SHA-256
