@@ -225,7 +225,7 @@ export default function HomePage() {
     loadDiagnostic();
   }, [selectedClient]);
 
-  const overdueCount = clients.filter((c) => c.is_overdue).length;
+  const overdueCount = clients.filter((c) => c.status_journey === 'compra' && c.is_overdue).length;
 
   // Paginacao Dinamica
   const [currentPage, setCurrentPage] = React.useState<number>(1);
@@ -528,12 +528,16 @@ export default function HomePage() {
                         {client.product}
                       </TableCell>
                       <TableCell>
-                        {client.is_overdue ? (
-                          <span className="font-bold text-red-600 dark:text-red-400 flex items-center gap-1">
+                        {client.status_journey !== 'compra' ? (
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-xs inline-flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Cumprido
+                          </span>
+                        ) : client.is_overdue ? (
+                          <span className="font-bold text-red-600 dark:text-red-400 text-xs inline-flex items-center gap-1">
                             <AlertTriangle className="w-3.5 h-3.5" /> ESTOURADO!
                           </span>
                         ) : (
-                          <span className="text-slate-600 dark:text-slate-400 font-medium">
+                          <span className="text-slate-600 dark:text-slate-400 text-xs font-medium">
                             {client.sla_hours_left}h úteis restantes
                           </span>
                         )}
