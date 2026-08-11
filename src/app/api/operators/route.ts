@@ -20,9 +20,16 @@ export async function GET(request: NextRequest) {
     const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
 
     if (!authError && authUsers?.users && authUsers.users.length > 0) {
-      const allUsers = authUsers.users.map((u) => ({
+      // Filtrar apenas os usuários pertencentes ao CRM
+      // Usuários do CRM possuem 'crm' no metadata ou possuem 'role' / 'status' (definidos durante registro/aprovação no CRM)
+      const crmUsersOnly = authUsers.users.filter((u) => {
+        const meta = u.user_metadata || {};
+        return meta.app === 'crm' || !!meta.role || !!meta.status || u.email?.toLowerCase() === 'canadasemfiltro.tech@gmail.com';
+      });
+
+      const allUsers = crmUsersOnly.map((u) => ({
         id: u.id,
-        name: u.user_metadata?.name || u.email?.split('@')[0] || 'Operador CSF',
+        name: u.user_metadata?.name || u.user_metadata?.full_name || u.email?.split('@')[0] || 'Operador CSF',
         email: u.email,
         role: (u.user_metadata?.role as UserRole) || 'consultant',
         status: (u.user_metadata?.status as string) || 'active',
@@ -62,6 +69,7 @@ export async function POST(request: NextRequest) {
       await supabase.auth.admin.updateUserById(targetUser.id, {
         user_metadata: {
           ...targetUser.user_metadata,
+          app: 'crm',
           role: role as UserRole,
           ...(isApproval ? { status: 'active' } : {}),
           ...(name ? { name } : {}),
@@ -82,8 +90,10 @@ export async function POST(request: NextRequest) {
         email,
         email_confirm: true,
         user_metadata: {
+          app: 'crm',
           name: name || email.split('@')[0],
           role: role as UserRole,
+          status: 'active',
         },
       });
 

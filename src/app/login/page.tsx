@@ -146,6 +146,7 @@ export default function LoginPage() {
         password,
         options: {
           data: {
+            app: 'crm',
             name: name.trim(),
             role: 'consultant',        // papel padrão, admin pode alterar depois
             status: 'pending',         // BLOQUEADO até aprovação administrativa
