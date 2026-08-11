@@ -331,10 +331,10 @@ export default function HomePage() {
                 </div>
               </div>
               <div className="mt-3 text-2xl font-bold text-slate-900 dark:text-slate-50">
-                1.420
+                {loading ? '...' : clients.length}
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Base sincronizada da Hotmart
+                Base real sincronizada do Supabase
               </p>
             </CardContent>
           </Card>
@@ -350,7 +350,7 @@ export default function HomePage() {
                 </div>
               </div>
               <div className="mt-3 text-2xl font-bold text-slate-900 dark:text-slate-50">
-                18
+                {loading ? '...' : clients.filter((c) => ['compra', 'diagnostico_enviado', 'acompanhamento'].includes(c.status_journey)).length}
               </div>
               <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
                 Fila operacional ativa
@@ -369,7 +369,7 @@ export default function HomePage() {
                 </div>
               </div>
               <div className="mt-3 text-2xl font-bold text-slate-900 dark:text-slate-50">
-                5
+                {loading ? '...' : clients.filter((c) => c.status_journey === 'diagnostico_enviado').length}
               </div>
               <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
                 Aguardando análise da equipe
