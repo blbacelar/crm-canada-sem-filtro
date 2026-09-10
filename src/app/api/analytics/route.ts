@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { calculateBusinessHoursSLA } from '@/lib/sla';
 
 export const dynamic = 'force-dynamic';
@@ -7,7 +8,16 @@ export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
+    const authorization = await requireAuth(['admin', 'marketing', 'tech']);
+    if (authorization.response) return authorization.response;
+    const supabase = createAdminClient();
+    const { data: slaSetting } = await (supabase as any)
+      .from('crm_settings')
+      .select('value')
+      .eq('key', 'sla')
+      .maybeSingle();
+    const slaConfig = slaSetting?.value || {};
+    const slaTargetHours = Number(slaConfig.targetHours) || 24;
 
     // 1. Buscar todos os clientes
     const { data: clients, error: clientErr } = await (supabase as any)
@@ -47,7 +57,12 @@ export async function GET(request: NextRequest) {
       }
 
       // Calcular SLA
-      const sla = calculateBusinessHoursSLA(c.created_at || new Date().toISOString(), 24);
+      const sla = calculateBusinessHoursSLA(
+        c.created_at || new Date().toISOString(),
+        slaTargetHours,
+        new Date(),
+        slaConfig,
+      );
       if (c.status_journey === 'compra') {
         totalSlaEvaluated++;
         if (!sla.isOverdue) {

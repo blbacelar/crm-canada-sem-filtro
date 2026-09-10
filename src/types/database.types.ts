@@ -26,6 +26,7 @@ export interface Database {
           email: string;
           name: string | null;
           role: UserRole;
+          status: 'pending' | 'active' | 'disabled';
           created_at: string;
           updated_at: string;
         };
@@ -34,6 +35,7 @@ export interface Database {
           email: string;
           name?: string | null;
           role?: UserRole;
+          status?: 'pending' | 'active' | 'disabled';
           created_at?: string;
           updated_at?: string;
         };
@@ -42,6 +44,7 @@ export interface Database {
           email?: string;
           name?: string | null;
           role?: UserRole;
+          status?: 'pending' | 'active' | 'disabled';
           updated_at?: string;
         };
       };
@@ -159,27 +162,59 @@ export interface Database {
           next_action?: string | null;
         };
       };
+      consultations: {
+        Row: {
+          id: string;
+          client_id: string;
+          consultant_id: string;
+          consultation_date: string;
+          value_amount: number;
+          commission_percentage: number;
+          company_return_amount: number;
+          status: 'scheduled' | 'completed' | 'cancelled';
+          notes: string | null;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          consultant_id: string;
+          consultation_date?: string;
+          value_amount: number;
+          commission_percentage?: number;
+          status?: 'scheduled' | 'completed' | 'cancelled';
+          notes?: string | null;
+          created_by: string;
+          created_at?: string;
+        };
+        Update: {
+          consultant_id?: string;
+          consultation_date?: string;
+          value_amount?: number;
+          commission_percentage?: number;
+          status?: 'scheduled' | 'completed' | 'cancelled';
+          notes?: string | null;
+        };
+      };
       commissions_config: {
         Row: {
           id: string;
           product_name: string;
           commission_percentage: number;
-          fixed_amount: number;
-          updated_by: string;
+          is_active: boolean;
           updated_at: string;
         };
         Insert: {
           id?: string;
           product_name: string;
           commission_percentage?: number;
-          fixed_amount?: number;
-          updated_by: string;
+          is_active?: boolean;
           updated_at?: string;
         };
         Update: {
           commission_percentage?: number;
-          fixed_amount?: number;
-          updated_by?: string;
+          is_active?: boolean;
           updated_at?: string;
         };
       };

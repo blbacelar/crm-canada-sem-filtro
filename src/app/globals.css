@@ -4,33 +4,125 @@
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-  }
+    --paper: #edf3f5;
+    --paper-shade: #e3ecef;
+    --paper-light: #f6fafb;
+    --paper-edge: #cfdee3;
+    --ink: #17222b;
+    --ink-soft: #3e5160;
+    --ink-mute: #586c7a;
+    --accent: #b71c3d;
+    --accent-hover: #9f1634;
+    --accent-soft: #d45f79;
+    --success: #2f6655;
+    --warning: #916c2a;
+    --rule: rgba(23, 34, 43, .14);
+    --rule-strong: rgba(23, 34, 43, .26);
+    --shadow: 0 24px 70px rgba(23, 34, 43, .08);
+    --font-display: "Instrument Serif", "Times New Roman", serif;
+    --font-body: "Spectral", Georgia, serif;
+    --font-sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
 
-  .dark {
-    --background: 222 47% 7%;
-    --foreground: 210 40% 98%;
-    --card: 222 47% 11%;
-    --card-foreground: 210 40% 98%;
-    --border: 217 33% 20%;
-    --input: 217 33% 20%;
-    --muted: 217 33% 15%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --background: 196 27% 94%;
+    --foreground: 204 22% 13%;
+    --card: 192 43% 97%;
+    --card-foreground: 204 22% 13%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 204 22% 13%;
+    --primary: 347 74% 41%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 196 27% 90%;
+    --secondary-foreground: 204 22% 13%;
+    --border: 195 27% 85%;
+    --input: 195 27% 85%;
+    --ring: 347 74% 41%;
+    --muted: 196 27% 90%;
+    --muted-foreground: 201 16% 41%;
   }
 }
 
 body {
-  background-color: hsl(var(--background));
-  color: hsl(var(--foreground));
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  margin: 0;
+  background:
+    radial-gradient(circle at 8% 2%, rgba(255,255,255,.66), transparent 32%),
+    var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+.editorial-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -.02em;
+}
+
+code,
+pre,
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: rgba(183, 28, 61, .18);
+}
+
+/* Mapeamento da paleta editorial para as utilidades existentes do CRM. */
+.bg-slate-50 { background-color: var(--paper) !important; }
+.bg-slate-100 { background-color: var(--paper-shade) !important; }
+.bg-white { background-color: var(--paper-light) !important; }
+.text-slate-950, .text-slate-900 { color: var(--ink) !important; }
+.text-slate-800, .text-slate-700, .text-slate-600 { color: var(--ink-soft) !important; }
+.text-slate-500, .text-slate-400 { color: var(--ink-mute) !important; }
+.border-slate-300, .border-slate-200 { border-color: var(--paper-edge) !important; }
+.text-red-500, .text-red-600, .text-red-700 { color: var(--accent) !important; }
+.bg-red-500, .bg-red-600 { background-color: var(--accent) !important; }
+.hover\:bg-red-700:hover { background-color: var(--accent-hover) !important; }
+
+header {
+  background-color: rgba(246, 250, 251, .92) !important;
+  border-color: var(--paper-edge) !important;
+}
+
+input,
+textarea,
+[role="combobox"] {
+  border-radius: 2px !important;
+  border-color: var(--paper-edge) !important;
+  background-color: #fff !important;
+  color: var(--ink) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+  }
 }
 
 @keyframes pulseGlow {

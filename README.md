@@ -101,11 +101,71 @@ npm run dev
 
 Acesse [http://localhost:3000](http://localhost:3000) no seu navegador.
 
+Se o navegador mostrar chunks 404 ou um erro interno do Webpack após uma interrupção do servidor, encerre os processos Next ativos e execute `npm run dev:clean`. Os testes Playwright usam automaticamente um diretório separado (`.next-e2e`) para não corromper o cache do servidor principal.
+
 ### 5. Validar o Build de Produção
 
 ```bash
 npm run build
 ```
+
+### 6. Testes automatizados dos endpoints
+
+Execute a suíte Playwright de contratos da API:
+
+```bash
+npm run test:e2e:api
+```
+
+Os testes iniciam o Next.js em uma porta isolada e validam que endpoints protegidos rejeitam requisições sem sessão, incluindo mutações e o webhook Hotmart sem `HOTTOK`.
+
+### Histórico WhatsApp via n8n
+
+O CRM consulta o histórico sob demanda através de `POST /api/whatsapp/history`. Configure no ambiente do servidor:
+
+```env
+N8N_WHATSAPP_HISTORY_WEBHOOK_URL=https://seu-n8n.example.com/webhook/historico-whatsapp
+N8N_WHATSAPP_SEND_WEBHOOK_URL=https://seu-n8n.example.com/webhook/enviar-whatsapp
+N8N_WHATSAPP_WEBHOOK_SECRET=seu-segredo-compartilhado
+N8N_WHATSAPP_HISTORY_WEBHOOK_SECRET=opcional
+```
+
+O CRM envia `{ "remoteJid": "5511999999999@s.whatsapp.net", "phone": "5511999999999@s.whatsapp.net" }` ao n8n e devolve a resposta JSON para a interface autenticada.
+
+O envio usa `POST /api/whatsapp/send` e encaminha ao n8n `{ "remoteJid", "phone", "message", "text", "clientId", "requestedBy" }`. O n8n deve retornar HTTP 2xx somente depois de confirmar o envio pela Evolution API.
+
+Para executar o smoke test da tela de login:
+
+```bash
+npm run test:e2e:smoke
+```
+
+O motor de horas úteis também possui testes determinísticos:
+
+```bash
+npm run test:sla
+```
+
+O contrato do webhook pode ser validado sem gravar dados, usando o token configurado no ambiente:
+
+```bash
+set -a; source .env.local; set +a
+npm run test:webhook
+```
+
+O fluxo autenticado exige uma conta de teste dedicada, informada apenas no ambiente local:
+
+```bash
+E2E_TEST_EMAIL=test-user@example.com \\
+E2E_TEST_PASSWORD='senha-do-usuario-de-teste' \\
+npm run test:e2e:auth
+```
+
+Não use credenciais de produção nos testes automatizados.
+
+### 7. Aplicar a Migration de Segurança
+
+Antes de liberar o CRM, aplique todas as migrations versionadas no projeto Supabase com `supabase db push`. A migration mais recente também garante que o processamento do webhook Hotmart grave cliente, compra e permissão de diagnóstico em uma única transação.
 
 ---
 

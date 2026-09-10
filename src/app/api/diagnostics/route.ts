@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth';
 import { normalizeClientEmail } from '@/lib/normalize-client';
+import { isConsultationUnlocked } from '@/lib/sla';
 
 export async function GET(request: NextRequest) {
   try {
+    const authorization = await requireAuth(['admin', 'consultant', 'tech']);
+    if (authorization.response) return authorization.response;
+
     const { searchParams } = new URL(request.url);
     const email = searchParams.get('email');
     const clientId = searchParams.get('client_id');
@@ -15,7 +19,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
+    const { supabase } = authorization.context;
 
     // O e-mail sempre resolve primeiro no cadastro central. Nunca procuramos
     // identidade dentro do snapshot do formulário, que é imutável e pode não
@@ -32,7 +36,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!resolvedClientId) {
-      return NextResponse.json({ diagnosticCase: null, diagnosticSubmission: null, answers: {}, submitted_at: null, status: 'pendente' });
+      return NextResponse.json({ diagnosticCase: null, diagnosticSubmission: null, answers: {}, submitted_at: null, status: 'pendente', consultationUnlocked: false });
     }
 
     const { data: cases, error: caseErr } = await (supabase as any)
@@ -56,12 +60,26 @@ export async function GET(request: NextRequest) {
     const diagnosticCase = cases && cases.length > 0 ? cases[0] : null;
     const diagnosticSubmission = submissions && submissions.length > 0 ? submissions[0] : null;
 
+    const { data: purchase } = await (supabase as any)
+      .from('purchases')
+      .select('purchase_date')
+      .eq('client_id', resolvedClientId)
+      .order('purchase_date', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    const consultationUnlocked = isConsultationUnlocked(
+      purchase?.purchase_date,
+      diagnosticSubmission?.submitted_at || diagnosticCase?.submitted_at,
+    );
+
     return NextResponse.json({
       diagnosticCase,
       diagnosticSubmission,
       answers: diagnosticSubmission?.answers_snapshot || {},
       submitted_at: diagnosticSubmission?.submitted_at || diagnosticCase?.submitted_at || null,
       status: diagnosticCase?.status || (diagnosticSubmission ? 'submitted' : 'pendente'),
+      consultationUnlocked,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

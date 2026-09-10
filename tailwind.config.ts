@@ -11,8 +11,8 @@ const config: Config = {
     extend: {
       colors: {
         canada: {
-          red: "#EF4444",
-          darkRed: "#DC2626",
+          red: "#B71C3D",
+          darkRed: "#9F1634",
         },
         slate: {
           850: "#172033",

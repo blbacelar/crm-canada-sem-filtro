@@ -3,25 +3,22 @@
 import * as React from 'react';
 import { Header } from '@/components/header';
 import {
-  Users,
-  Clock,
   FileCheck,
   AlertTriangle,
-  Plus,
   Filter,
-  ExternalLink,
   MessageSquare,
   DollarSign,
   Calendar,
   CheckCircle2,
   AlertCircle,
   ChevronRight,
-  ChevronLeft,
   Shield,
   Eye,
   EyeOff,
   Copy,
   Check,
+  UserRound,
+  RefreshCw,
 } from 'lucide-react';
 import { UserRole, JourneyState } from '@/types/database.types';
 import { Button } from '@/components/ui/button';
@@ -29,14 +26,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableHead,
-  TableRow,
-  TableCell,
-} from '@/components/ui/table';
 import {
   Sheet,
   SheetContent,
@@ -49,6 +38,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
@@ -59,56 +49,121 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { createClient as createSupabaseClient } from '@/lib/supabase/client';
+import { MockClient } from '@/components/crm/types';
+import { OperationalSummary } from '@/components/crm/operational-summary';
+import { OperationalQueueTable } from '@/components/crm/operational-queue-table';
+import { ConsultationControl } from '@/components/crm/consultation-control';
+import { fetchCurrentUser } from '@/lib/client-auth';
 
-// Mock de dados para demonstração da Fila Operacional
-interface MockClient {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  document?: string;
-  country?: string;
-  zip_code?: string;
-  city?: string;
-  state?: string;
-  address?: string;
-  district?: string;
-  number?: string;
-  complement?: string;
-  product: string;
-  status_journey: JourneyState;
-  sla_hours_left: number;
-  is_overdue: boolean;
-  assigned_consultant: string;
-  purchase_date: string;
-  price_gross: number;
-  price_net: number;
-  diagnostic_status: 'pendente' | 'enviado' | 'analisado';
-  days_since_purchase: number;
-  commission_amount: number;
+function normalizeWhatsappHistory(history: any) {
+  if (!history) return [];
+  if (history.totalMessages === 0 || (Array.isArray(history.history) && history.history.length === 0) || history.history?.totalMessages === 0 || (Array.isArray(history.history?.history) && history.history.history.length === 0)) return [];
+  if (Array.isArray(history) && history.length === 1 && (history[0]?.totalMessages === 0 || (Array.isArray(history[0]?.history) && history[0].history.length === 0))) return [];
+  const candidates = [
+    history?.data,
+    history?.data?.messages,
+    history?.response?.messages?.records,
+    history?.messages,
+    history?.history,
+    history,
+  ];
+  const source = candidates.find((candidate) => Array.isArray(candidate) && candidate.length > 0) || [];
+  return source.map((item: any, index: number) => {
+    const key = item?.key || {};
+    const message = item?.message || item;
+    const timestamp = Number(item?.messageTimestamp || item?.timestamp || item?.createdAt || 0);
+    const date = timestamp
+      ? new Date(timestamp < 100000000000 ? timestamp * 1000 : timestamp)
+      : (item?.created_at ? new Date(item.created_at) : null);
+    return {
+      id: String(key.id || item?.id || `message-${index}`),
+      fromMe: Boolean(key.fromMe ?? item?.fromMe ?? item?.from_me),
+      sender: item?.pushName || item?.senderName || item?.sender || (Boolean(key.fromMe ?? item?.fromMe) ? 'CRM' : 'Cliente'),
+      text: message?.conversation
+        || message?.extendedTextMessage?.text
+        || message?.text
+        || message?.body
+        || message?.caption
+        || null,
+      type: item?.messageType || item?.type || Object.keys(message || {})[0] || 'Mensagem',
+      date: date && !Number.isNaN(date.getTime()) ? date : null,
+      raw: item,
+    };
+  }).sort((left: any, right: any) => (left.date?.getTime() || 0) - (right.date?.getTime() || 0));
 }
 
-const JOURNEY_LABELS: Record<JourneyState, { label: string; bg: string; text: string }> = {
-  compra: { label: 'Compra Efetuada', bg: 'bg-blue-500/15', text: 'text-blue-600 dark:text-blue-400' },
-  diagnostico_enviado: { label: 'Diagnóstico Enviado', bg: 'bg-purple-500/15', text: 'text-purple-600 dark:text-purple-400' },
-  acompanhamento: { label: 'Acompanhamento', bg: 'bg-amber-500/15', text: 'text-amber-600 dark:text-amber-400' },
-  consulta_marcada: { label: 'Consulta Marcada', bg: 'bg-cyan-500/15', text: 'text-cyan-600 dark:text-cyan-400' },
-  consulta_concluida: { label: 'Consulta Concluída', bg: 'bg-emerald-500/15', text: 'text-emerald-600 dark:text-emerald-400' },
-  cancelamento: { label: 'Cancelamento', bg: 'bg-slate-500/15', text: 'text-slate-600 dark:text-slate-400' },
-  reembolso: { label: 'Reembolso', bg: 'bg-pink-500/15', text: 'text-pink-600 dark:text-pink-400' },
+const diagnosticStatusLabels: Record<string, string> = {
+  CLIENT_DRAFT: 'RASCUNHO DO CLIENTE',
+  DRAFT: 'RASCUNHO',
+  SUBMITTED: 'ENVIADO',
+  APPROVED: 'APROVADO',
+  REJECTED: 'REPROVADO',
+  PENDING: 'PENDENTE',
+  NOT_SENT: 'NÃO ENVIADO',
+  NOT_STARTED: 'NÃO INICIADO',
 };
 
+const diagnosticAnswerLabels: Record<string, string> = {
+  age: 'Idade',
+  overstay: 'Permaneceu além do prazo',
+  city_size: 'Tamanho da cidade',
+  city_size_preference: 'Preferência de tamanho da cidade',
+  french_test: 'Teste de francês',
+  english_test: 'Teste de inglês',
+  english_level: 'Nível de inglês',
+  french_level: 'Nível de francês',
+  family: 'Família',
+  profession: 'Profissão',
+  education: 'Escolaridade',
+};
+
+const diagnosticValueLabels: Record<string, string> = {
+  yes: 'Sim',
+  no: 'Não',
+  true: 'Sim',
+  false: 'Não',
+  small: 'Pequena',
+  medium: 'Média',
+  large: 'Grande',
+};
+
+function translateDiagnosticStatus(status: unknown) {
+  const normalized = String(status || '').trim().toUpperCase();
+  return diagnosticStatusLabels[normalized] || normalized.replace(/_/g, ' ') || 'NÃO INFORMADO';
+}
+
+function translateDiagnosticAnswer(key: string, value: unknown) {
+  const label = diagnosticAnswerLabels[key.toLowerCase()] || key.replace(/_/g, ' ');
+  if (typeof value !== 'string') return { label, value };
+  const translatedValue = diagnosticValueLabels[value.trim().toLowerCase()] || value;
+  return { label, value: translatedValue };
+}
+
+// Mock de dados para demonstração da Fila Operacional
 export default function HomePage() {
-  const [role, setRole] = React.useState<UserRole>('admin');
-  const [userEmail, setUserEmail] = React.useState<string>('admin@canadasemfiltro.com');
+  const [role, setRole] = React.useState<UserRole>('consultant');
+  const [userEmail, setUserEmail] = React.useState<string>('');
+  const [authReady, setAuthReady] = React.useState(false);
   const [clients, setClients] = React.useState<MockClient[]>([]);
+  const [attendants, setAttendants] = React.useState<Array<{ id: string; name: string; email: string }>>([]);
 
   React.useEffect(() => {
-    const storedRole = localStorage.getItem('crm_user_role') as UserRole;
-    const storedEmail = localStorage.getItem('crm_user_email');
-    if (storedRole) setRole(storedRole);
-    if (storedEmail) setUserEmail(storedEmail);
+    fetchCurrentUser().then((user) => {
+      if (!user) return;
+      setRole(user.role as UserRole);
+      setUserEmail(user.email || '');
+      setAuthReady(true);
+    });
   }, []);
+
+  React.useEffect(() => {
+    if (!authReady) return;
+    fetch('/api/attendants', { cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((json) => setAttendants(json?.attendants || []))
+      .catch((error) => console.error('Erro ao carregar atendentes:', error));
+  }, [authReady]);
   const [selectedClient, setSelectedClient] = React.useState<MockClient | null>(null);
   const [statusFilter, setStatusFilter] = React.useState<string>('todos');
   const [searchQuery, setSearchQuery] = React.useState<string>('');
@@ -116,6 +171,11 @@ export default function HomePage() {
   const [showCommissionModal, setShowCommissionModal] = React.useState<boolean>(false);
   const [showDuplicateModal, setShowDuplicateModal] = React.useState<boolean>(false);
   const [loading, setLoading] = React.useState<boolean>(false);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [currentPage, setCurrentPage] = React.useState<number>(1);
+  const [pageSize, setPageSize] = React.useState<number>(10);
+  const [totalClientCount, setTotalClientCount] = React.useState<number>(0);
+  const [summaryCounts, setSummaryCounts] = React.useState({ inService: 0, diagnostics: 0, overdue: 0 });
 
   // Commission & Duplicates state
   const [commissionRules, setCommissionRules] = React.useState<any[]>([]);
@@ -125,6 +185,10 @@ export default function HomePage() {
   // Diagnostic Realtime State
   const [diagnosticDetails, setDiagnosticDetails] = React.useState<any>(null);
   const [loadingDiagnostic, setLoadingDiagnostic] = React.useState<boolean>(false);
+  const [whatsappHistory, setWhatsappHistory] = React.useState<any>(null);
+  const [loadingWhatsappHistory, setLoadingWhatsappHistory] = React.useState(false);
+  const [whatsappHistoryError, setWhatsappHistoryError] = React.useState<string | null>(null);
+  const [showWhatsappHistoryModal, setShowWhatsappHistoryModal] = React.useState(false);
 
   // Form states
   const [interactionChannel, setInteractionChannel] = React.useState<'whatsapp' | 'email' | 'call'>('whatsapp');
@@ -165,18 +229,36 @@ export default function HomePage() {
   }, []);
 
   React.useEffect(() => {
+    if (role !== 'admin') return;
     fetchAdminData();
-  }, [fetchAdminData]);
+  }, [role, fetchAdminData]);
 
   // Carregar lista de clientes do banco oficial Supabase via API
   const fetchClientsFromApi = React.useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/clients', { cache: 'no-store' });
-      if (res.ok) {
-        const json = await res.json();
-        const rawList = json.clients || [];
-        const apiClients: MockClient[] = rawList.map((c: any) => ({
+      const params = new URLSearchParams({
+        limit: String(pageSize),
+        offset: String((currentPage - 1) * pageSize),
+        status: statusFilter,
+      });
+      if (searchQuery.trim()) params.set('search', searchQuery.trim());
+      const res = await fetch(`/api/clients?${params.toString()}`, { cache: 'no-store' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setLoadError(json.error || 'Não foi possível carregar os clientes.');
+        return;
+      }
+
+      setLoadError(null);
+      const rawList = json.clients || [];
+        setTotalClientCount(Number(json.total) || rawList.length);
+        setSummaryCounts(json.summary || {
+          inService: rawList.filter((client: any) => ['compra', 'diagnostico_enviado', 'acompanhamento'].includes(client.status_journey)).length,
+          diagnostics: rawList.filter((client: any) => client.status_journey === 'diagnostico_enviado').length,
+          overdue: rawList.filter((client: any) => client.is_overdue).length,
+        });
+      const apiClients: MockClient[] = rawList.map((c: any) => ({
           id: c.id,
           name: c.name || 'Cliente Sem Nome',
           email: c.email || '',
@@ -191,35 +273,100 @@ export default function HomePage() {
           number: c.number,
           complement: c.complement,
           product: c.product_name || '7 Vídeo Aulas + E-book + Diário de Bordo + Diagnóstico',
-          status_journey: (c.status_journey || 'compra') as JourneyState,
+          status_journey: (c.status_journey || c.effective_status_journey || 'compra') as JourneyState,
           sla_hours_left: typeof c.sla_hours_left === 'number' ? c.sla_hours_left : 24,
           is_overdue: !!c.is_overdue,
-          assigned_consultant: c.assigned_consultant_id ? 'Consultora Designada' : 'Pendente',
+          assigned_consultant_id: c.assigned_consultant_id || null,
+          assigned_consultant: c.assigned_consultant_name || (c.assigned_consultant_id ? 'Atendente Designado' : 'Pendente'),
           purchase_date: c.purchase_date || c.created_at || new Date().toISOString(),
           price_gross: typeof c.price_gross === 'number' ? c.price_gross : 197.0,
           price_net: typeof c.price_net === 'number' ? c.price_net : 169.20,
-          diagnostic_status: c.status_journey === 'compra' ? 'pendente' : 'enviado',
+          diagnostic_status: c.diagnostic_status || (c.status_journey === 'compra' ? 'pendente' : 'enviado'),
           days_since_purchase: c.created_at ? Math.floor((Date.now() - new Date(c.created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0,
-          commission_amount: (typeof c.price_net === 'number' ? c.price_net : 169.20) * 0.1,
-        }));
-        setClients(apiClients);
-        // Atualizar o cliente atualmente aberto no drawer com os dados mais recentes do Supabase
-        setSelectedClient((prev) => {
-          if (!prev) return null;
-          const updated = apiClients.find((c) => c.id === prev.id || c.email.toLowerCase() === prev.email.toLowerCase());
-          return updated || prev;
-        });
-      }
+          consultation_booked: Boolean(c.consultation_booked),
+          consultation_status: c.consultation_status || null,
+          consultation_date: c.consultation_date || null,
+          consultation_value: typeof c.consultation_value === 'number' ? c.consultation_value : null,
+          consultation_commission_percentage: typeof c.consultation_commission_percentage === 'number' ? c.consultation_commission_percentage : null,
+          consultation_company_return_amount: typeof c.consultation_company_return_amount === 'number' ? c.consultation_company_return_amount : null,
+          consultation_consultant_name: c.consultation_consultant_name || null,
+      }));
+      setClients(apiClients);
+      // Atualizar o cliente atualmente aberto no drawer com os dados mais recentes do Supabase
+      setSelectedClient((prev) => {
+        if (!prev) return null;
+        const updated = apiClients.find((c) => c.id === prev.id || c.email.toLowerCase() === prev.email.toLowerCase());
+        return updated || prev;
+      });
     } catch (err) {
       console.error('Erro ao carregar clientes:', err);
+      setLoadError('Não foi possível conectar ao serviço de clientes.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentPage, pageSize, searchQuery, statusFilter]);
 
   React.useEffect(() => {
+    if (!authReady) return;
     fetchClientsFromApi();
+  }, [authReady, fetchClientsFromApi]);
+
+  React.useEffect(() => {
+    const supabase = createSupabaseClient();
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    let channel: any = null;
+    let disposed = false;
+
+    const connect = () => {
+      if (disposed) return;
+      channel = supabase
+        .channel('crm-client-updates')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => {
+          void fetchClientsFromApi();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'purchases' }, () => {
+          void fetchClientsFromApi();
+        });
+
+      channel.subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          if (reconnectTimer) clearTimeout(reconnectTimer);
+          reconnectTimer = undefined;
+          return;
+        }
+        if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') && !reconnectTimer) {
+          reconnectTimer = setTimeout(() => {
+            reconnectTimer = undefined;
+            const failedChannel = channel;
+            channel = null;
+            if (failedChannel) {
+              void supabase.removeChannel(failedChannel).finally(connect);
+            } else {
+              connect();
+            }
+          }, 1500);
+        }
+      });
+    };
+
+    connect();
+
+    return () => {
+      disposed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (channel) void supabase.removeChannel(channel);
+    };
   }, [fetchClientsFromApi]);
+
+  React.useEffect(() => {
+    if (!selectedClient) {
+      setWhatsappHistory(null);
+      setWhatsappHistoryError(null);
+      return;
+    }
+    setWhatsappHistory(null);
+    setWhatsappHistoryError(null);
+  }, [selectedClient?.id]);
 
   // Carregar respostas de Diagnóstico em Tempo Real quando um cliente é selecionado
   React.useEffect(() => {
@@ -243,12 +390,6 @@ export default function HomePage() {
     loadDiagnostic();
   }, [selectedClient]);
 
-  const overdueCount = clients.filter((c) => c.status_journey === 'compra' && c.is_overdue).length;
-
-  // Paginacao Dinamica
-  const [currentPage, setCurrentPage] = React.useState<number>(1);
-  const [pageSize, setPageSize] = React.useState<number>(10);
-
   React.useEffect(() => {
     setCurrentPage(1);
   }, [statusFilter, searchQuery, pageSize]);
@@ -268,17 +409,77 @@ export default function HomePage() {
     return matchesSearch;
   });
 
-  const totalPages = Math.ceil(filteredClients.length / pageSize) || 1;
-  const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, filteredClients.length);
-  const paginatedClients = filteredClients.slice(startIndex, startIndex + pageSize);
+  const totalPages = Math.ceil(totalClientCount / pageSize) || 1;
+  const paginatedClients = filteredClients;
 
-  const handleStateChange = (clientId: string, newState: JourneyState) => {
+  const handleStateChange = async (clientId: string, newState: JourneyState) => {
+    const response = await fetch('/api/clients', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: clientId, status_journey: newState }),
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      console.error(payload.error || 'Não foi possível alterar o estado da jornada.');
+      return;
+    }
+
     setClients((prev) =>
       prev.map((c) => (c.id === clientId ? { ...c, status_journey: newState, is_overdue: false } : c))
     );
     if (selectedClient && selectedClient.id === clientId) {
       setSelectedClient((prev) => (prev ? { ...prev, status_journey: newState, is_overdue: false } : null));
+    }
+  };
+
+  const handleAttendantChange = async (clientId: string, attendantId: string) => {
+    const assigned_consultant_id = attendantId === 'unassigned' ? null : attendantId;
+    const response = await fetch('/api/clients', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: clientId, assigned_consultant_id }),
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      console.error(payload.error || 'Não foi possível associar o atendente.');
+      return;
+    }
+    const attendant = attendants.find((item) => item.id === assigned_consultant_id);
+    const assigned_consultant = attendant?.name || (assigned_consultant_id ? 'Atendente Designado' : 'Pendente');
+    setClients((prev) => prev.map((client) => client.id === clientId
+      ? { ...client, assigned_consultant_id, assigned_consultant }
+      : client));
+    setSelectedClient((prev) => prev?.id === clientId ? { ...prev, assigned_consultant_id, assigned_consultant } : prev);
+  };
+
+  const handleFetchWhatsappHistory = async (openModal = true) => {
+    if (!selectedClient?.phone) return;
+    const digits = selectedClient.phone.replace(/\D/g, '');
+    if (!digits) {
+      setWhatsappHistoryError('Este cliente não possui um telefone válido.');
+      return;
+    }
+    const remoteJid = `${digits}@s.whatsapp.net`;
+    setLoadingWhatsappHistory(true);
+    setWhatsappHistoryError(null);
+    try {
+      const response = await fetch('/api/whatsapp/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ remoteJid }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setWhatsappHistoryError(payload.error || 'Não foi possível buscar o histórico desta conversa.');
+        return;
+      }
+      setWhatsappHistory(payload.history);
+      if (openModal) setShowWhatsappHistoryModal(true);
+    } catch (error) {
+      console.error('Erro ao buscar histórico WhatsApp:', error);
+      setWhatsappHistoryError('Não foi possível conectar ao serviço de histórico.');
+    } finally {
+      setLoadingWhatsappHistory(false);
     }
   };
 
@@ -335,6 +536,8 @@ export default function HomePage() {
     }
   };
 
+  const whatsappMessages = React.useMemo(() => normalizeWhatsappHistory(whatsappHistory), [whatsappHistory]);
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50 transition-colors">
       <Header
@@ -346,284 +549,44 @@ export default function HomePage() {
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {/* Metric Cards Banner using shadcn Card Component */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Total de Clientes
-                </span>
-                <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500">
-                  <Users className="w-5 h-5" />
-                </div>
+        {loadError && (
+          <Card className="border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/30">
+            <CardContent className="flex items-start gap-3 p-4 text-sm text-red-700 dark:text-red-300">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-semibold">Não foi possível carregar os dados</p>
+                <p className="mt-1">{loadError}</p>
+                <p className="mt-2 text-xs opacity-80">Confirme a sessão ativa e se a migration de segurança foi executada no projeto Supabase.</p>
               </div>
-              <div className="mt-3 text-2xl font-bold text-slate-900 dark:text-slate-50">
-                {loading ? '...' : clients.length}
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Base real sincronizada do Supabase
-              </p>
             </CardContent>
           </Card>
+        )}
+        <OperationalSummary
+          clients={clients}
+          totalClientCount={totalClientCount}
+          inServiceCount={summaryCounts.inService}
+          diagnosticsCount={summaryCounts.diagnostics}
+          loading={loading}
+          overdueCount={summaryCounts.overdue}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          role={role}
+          pendingDuplicatesCount={pendingDuplicates.length}
+          onOpenDuplicates={() => setShowDuplicateModal(true)}
+          onOpenManualClient={() => setShowManualModal(true)}
+        />
 
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Em Atendimento
-                </span>
-                <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
-                  <Clock className="w-5 h-5" />
-                </div>
-              </div>
-              <div className="mt-3 text-2xl font-bold text-slate-900 dark:text-slate-50">
-                {loading ? '...' : clients.filter((c) => ['compra', 'diagnostico_enviado', 'acompanhamento'].includes(c.status_journey)).length}
-              </div>
-              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                Fila operacional ativa
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Diagnósticos Enviados
-                </span>
-                <div className="p-2 rounded-lg bg-purple-500/10 text-purple-500">
-                  <FileCheck className="w-5 h-5" />
-                </div>
-              </div>
-              <div className="mt-3 text-2xl font-bold text-slate-900 dark:text-slate-50">
-                {loading ? '...' : clients.filter((c) => c.status_journey === 'diagnostico_enviado').length}
-              </div>
-              <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-                Aguardando análise da equipe
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card
-            className={
-              overdueCount > 0
-                ? 'border-red-500 dark:border-red-500 overdue-pulse'
-                : ''
-            }
-          >
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  SLA Estourado (24h úteis)
-                </span>
-                <div className="p-2 rounded-lg bg-red-500/10 text-red-500">
-                  <AlertTriangle className="w-5 h-5" />
-                </div>
-              </div>
-              <div className="mt-3 text-2xl font-bold text-red-600 dark:text-red-500">
-                {overdueCount}
-              </div>
-              <p className="text-xs text-red-500 mt-1 font-medium">
-                {overdueCount > 0 ? 'Ação necessária imediata!' : 'Nenhum atraso'}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Action Controls & Filters using shadcn Button */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-          {/* Quick Filter Buttons */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0">
-            <Button
-              variant={statusFilter === 'todos' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setStatusFilter('todos')}
-            >
-              Todos ({clients.length})
-            </Button>
-            <Button
-              variant={statusFilter === 'overdue' ? 'default' : 'destructive'}
-              size="sm"
-              onClick={() => setStatusFilter('overdue')}
-              className="gap-1"
-            >
-              <AlertCircle className="w-3.5 h-3.5" />
-              <span>Atrasados ({overdueCount})</span>
-            </Button>
-            <Button
-              variant={statusFilter === 'compra' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setStatusFilter('compra')}
-            >
-              Novas Compras
-            </Button>
-            <Button
-              variant={statusFilter === 'diagnostico_enviado' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setStatusFilter('diagnostico_enviado')}
-            >
-              Diagnósticos
-            </Button>
-          </div>
-
-          {/* Contingência Manual & Admin Controls */}
-          <div className="flex items-center gap-2 self-end sm:self-auto">
-            {role === 'admin' && (
-              <>
-                {pendingDuplicates.length > 0 && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => setShowDuplicateModal(true)}
-                    className="gap-1.5 animate-pulse"
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    <span>{pendingDuplicates.length} Duplicidades</span>
-                  </Button>
-                )}
-              </>
-            )}
-
-            <Button
-              onClick={() => setShowManualModal(true)}
-              className="gap-1.5"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Novo Cliente Manual</span>
-            </Button>
-          </div>
-        </div>
-
-        {/* Fila de Atendimento Data Table using shadcn Table Component */}
-        <Card className="overflow-hidden">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
-              <Filter className="w-4 h-4 text-red-500" />
-              <span>Fila Operacional de Atendimento</span>
-            </h2>
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-              SLA padrão: 24h úteis
-            </span>
-          </div>
-
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Estado da Jornada</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Produto</TableHead>
-                <TableHead>SLA Restante</TableHead>
-                <TableHead>Responsável</TableHead>
-                <TableHead className="text-right">Ação</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedClients.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-slate-500 text-xs font-medium">
-                    Nenhum cliente encontrado com os filtros selecionados.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                paginatedClients.map((client) => {
-                  const labelInfo = JOURNEY_LABELS[client.status_journey];
-                  return (
-                    <TableRow
-                      key={client.id}
-                      onClick={() => setSelectedClient(client)}
-                      className={client.is_overdue ? 'border-l-4 border-l-red-500 bg-red-500/5' : ''}
-                    >
-                      <TableCell>
-                        <span className={`px-2.5 py-1 rounded-full font-semibold text-[11px] inline-flex items-center justify-center text-center gap-1 ${labelInfo.bg} ${labelInfo.text}`}>
-                          {labelInfo.label}
-                        </span>
-                      </TableCell>
-                      <TableCell className="font-medium text-slate-900 dark:text-slate-100">
-                        <div>{client.name}</div>
-                        <div className="text-[11px] text-slate-400">{client.email}</div>
-                      </TableCell>
-                      <TableCell className="text-slate-600 dark:text-slate-300">
-                        {client.product}
-                      </TableCell>
-                      <TableCell>
-                        {client.status_journey !== 'compra' ? (
-                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-xs inline-flex items-center gap-1">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Cumprido
-                          </span>
-                        ) : client.is_overdue ? (
-                          <span className="font-bold text-red-600 dark:text-red-400 text-xs inline-flex items-center gap-1">
-                            <AlertTriangle className="w-3.5 h-3.5" /> ESTOURADO!
-                          </span>
-                        ) : (
-                          <span className="text-slate-600 dark:text-slate-400 text-xs font-medium">
-                            {client.sla_hours_left}h úteis restantes
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-slate-600 dark:text-slate-300 font-medium">
-                        {client.assigned_consultant}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="secondary" size="sm" className="gap-1">
-                          <span>Ver Ficha</span>
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-
-          {/* Barra Dinâmica de Paginação */}
-          <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
-            <div className="flex items-center gap-3">
-              <span className="text-slate-500 dark:text-slate-400 font-medium">Itens por página:</span>
-              <Select value={String(pageSize)} onValueChange={(val) => setPageSize(Number(val))}>
-                <SelectTrigger className="h-8 w-20 text-xs font-semibold">
-                  <SelectValue placeholder="10" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
-              <span className="text-slate-500 dark:text-slate-400">
-                Exibindo <strong>{filteredClients.length === 0 ? 0 : startIndex + 1}</strong> - <strong>{endIndex}</strong> de <strong>{filteredClients.length}</strong> clientes
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                className="gap-1"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span>Anterior</span>
-              </Button>
-              <span className="text-slate-600 dark:text-slate-300 font-bold px-2">
-                Página {currentPage} de {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                className="gap-1"
-              >
-                <span>Próximo</span>
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        </Card>
+        <OperationalQueueTable
+          clients={paginatedClients}
+          loading={loading}
+          totalClientCount={totalClientCount}
+          currentPage={currentPage}
+          pageSize={pageSize}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+          onSelectClient={setSelectedClient}
+        />
       </main>
 
       {/* Drawer de Detalhes do Cliente usando shadcn Sheet Component */}
@@ -709,9 +672,10 @@ export default function HomePage() {
                 <TabsList className="w-full justify-start">
                   <TabsTrigger value="perfil">Perfil & Compras</TabsTrigger>
                   <TabsTrigger value="diagnostico">Diagnóstico & 7 Dias</TabsTrigger>
+                  <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
                   <TabsTrigger value="interacao">Registrar Contato</TabsTrigger>
                   {(role === 'admin' || role === 'consultant') && (
-                    <TabsTrigger value="comissao">Comissão</TabsTrigger>
+                    <TabsTrigger value="comissao">Consultoria</TabsTrigger>
                   )}
                 </TabsList>
 
@@ -739,10 +703,29 @@ export default function HomePage() {
                           </p>
                         </div>
                         <div>
-                          <span className="text-slate-400">Consultora Atribuída:</span>
-                          <p className="font-semibold text-slate-900 dark:text-slate-100">
-                            {selectedClient.assigned_consultant}
-                          </p>
+                          <span className="text-slate-400">Atendente responsável:</span>
+                          {role === 'admin' ? (
+                            <Select
+                              value={selectedClient.assigned_consultant_id || 'unassigned'}
+                              onValueChange={(value) => handleAttendantChange(selectedClient.id, value)}
+                            >
+                              <SelectTrigger className="mt-1 h-8 text-xs font-semibold">
+                                <SelectValue placeholder="Selecionar atendente" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="unassigned">Sem atendente</SelectItem>
+                                {attendants.map((attendant) => (
+                                  <SelectItem key={attendant.id} value={attendant.id}>
+                                    {attendant.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <p className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                              <UserRound className="w-3.5 h-3.5" /> {selectedClient.assigned_consultant}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </Card>
@@ -831,7 +814,7 @@ export default function HomePage() {
                         </div>
                         {selectedClient.district && (
                           <div className="col-span-2">
-                            <span className="text-slate-400">Bairro / District:</span>
+                            <span className="text-slate-400">Bairro:</span>
                             <p className="font-medium text-slate-900 dark:text-slate-100">
                               {revealSensitiveData
                                 ? selectedClient.district
@@ -842,24 +825,58 @@ export default function HomePage() {
                       </div>
                     </Card>
 
-                    {/* Direct WhatsApp Action Button */}
-                    <Button
-                      variant="emerald"
-                      className="w-full gap-2 shadow-md shadow-emerald-600/20"
-                      onClick={() => {
-                        window.open(`https://wa.me/${selectedClient.phone.replace(/[^0-9]/g, '')}`, '_blank');
-                      }}
-                    >
-                      <MessageSquare className="w-4 h-4" />
-                      <span>Iniciar Conversa no WhatsApp Web</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </Button>
+                  </TabsContent>
+
+                  <TabsContent value="whatsapp" className="m-0 flex min-h-[520px] flex-col gap-3">
+                    <Card className="flex min-h-[520px] flex-col overflow-hidden border-emerald-500/20">
+                      <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-emerald-500/5 p-4 dark:border-slate-800">
+                        <div>
+                          <h3 className="flex items-center gap-2 text-sm font-bold text-emerald-700 dark:text-emerald-300">
+                            <MessageSquare className="h-4 w-4" /> Conversa pelo WhatsApp
+                          </h3>
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            Histórico e mensagens deste cliente.
+                          </p>
+                        </div>
+                        <Button type="button" variant="outline" size="sm" onClick={() => void handleFetchWhatsappHistory(false)} disabled={loadingWhatsappHistory || !selectedClient.phone} className="gap-1.5">
+                          <RefreshCw className={`h-3.5 w-3.5 ${loadingWhatsappHistory ? 'animate-spin' : ''}`} />
+                          Atualizar
+                        </Button>
+                      </div>
+                      <div className="flex-1 space-y-3 overflow-y-auto bg-slate-100/70 p-4 dark:bg-slate-950">
+                        {whatsappHistoryError && <p className="rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-600">{whatsappHistoryError}</p>}
+                        {whatsappHistory === null && !whatsappHistoryError ? (
+                          <div className="flex h-full min-h-64 flex-col items-center justify-center gap-2 text-center text-sm text-slate-500">
+                            <MessageSquare className="h-8 w-8 text-slate-300" />
+                            <span>Busque o histórico para iniciar a conversa.</span>
+                            <Button type="button" size="sm" onClick={() => void handleFetchWhatsappHistory(false)} disabled={loadingWhatsappHistory || !selectedClient.phone}>
+                              {loadingWhatsappHistory ? 'Buscando...' : 'Buscar histórico'}
+                            </Button>
+                          </div>
+                        ) : whatsappMessages.length === 0 && !whatsappHistoryError ? (
+                          <div className="flex h-full min-h-64 items-center justify-center text-center text-sm text-slate-500">Não há histórico de chat para este cliente.</div>
+                        ) : whatsappMessages.map((message: any) => (
+                          <div key={message.id} className={`flex ${message.fromMe ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[88%] rounded-2xl px-3 py-2 shadow-sm ${message.fromMe ? 'rounded-br-sm bg-emerald-600 text-white' : 'rounded-bl-sm border border-slate-200 bg-white text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100'}`}>
+                              <div className={`mb-1 flex items-center justify-between gap-3 text-[10px] ${message.fromMe ? 'text-emerald-100' : 'text-slate-400'}`}>
+                                <span className="font-semibold">{message.sender}</span>
+                                <span>{message.date ? message.date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Data não informada'}</span>
+                              </div>
+                              <p className="whitespace-pre-wrap break-words text-sm">{message.text || `[${message.type}]`}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="border-t border-slate-200 bg-white p-3 text-center text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-900">
+                        O WhatsApp está disponível apenas para consulta do histórico nesta etapa.
+                      </div>
+                    </Card>
                   </TabsContent>
 
                   <TabsContent value="diagnostico" className="space-y-4 text-xs m-0">
                     <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-300 space-y-1">
                       <span className="font-bold flex items-center gap-1.5">
-                        <FileCheck className="w-4 h-4" /> Status do Diagnóstico: {diagnosticDetails?.status ? String(diagnosticDetails.status).toUpperCase() : selectedClient.diagnostic_status.toUpperCase()}
+                        <FileCheck className="w-4 h-4" /> Status do Diagnóstico: {translateDiagnosticStatus(diagnosticDetails?.status || selectedClient.diagnostic_status)}
                       </span>
                       <p className="text-[11px] opacity-90">
                         {loadingDiagnostic ? (
@@ -879,14 +896,17 @@ export default function HomePage() {
                           <FileCheck className="w-3.5 h-3.5" /> Resumo das Respostas do Cliente
                         </h3>
                         <div className="space-y-2 text-xs max-h-48 overflow-y-auto pr-1">
-                          {Object.entries(diagnosticDetails.answers).map(([key, val]: [string, any]) => (
-                            <div key={key} className="border-b border-slate-200 dark:border-slate-800/60 pb-1.5">
-                              <span className="text-slate-400 font-medium capitalize">{key.replace(/_/g, ' ')}:</span>
-                              <p className="font-medium text-slate-900 dark:text-slate-100">
-                                {typeof val === 'object' ? JSON.stringify(val) : String(val)}
-                              </p>
-                            </div>
-                          ))}
+                          {Object.entries(diagnosticDetails.answers).map(([key, val]: [string, any]) => {
+                            const translated = translateDiagnosticAnswer(key, val);
+                            return (
+                              <div key={key} className="border-b border-slate-200 dark:border-slate-800/60 pb-1.5">
+                                <span className="text-slate-400 font-medium">{translated.label}:</span>
+                                <p className="font-medium text-slate-900 dark:text-slate-100">
+                                  {typeof translated.value === 'object' ? JSON.stringify(translated.value) : String(translated.value)}
+                                </p>
+                              </div>
+                            );
+                          })}
                         </div>
                       </Card>
                     )}
@@ -896,7 +916,7 @@ export default function HomePage() {
                         <Calendar className="w-4 h-4" /> Regra dos 7 Dias Pós-Compra (Garantia Hotmart)
                       </span>
                       <p className="text-[11px]">
-                        {selectedClient.days_since_purchase >= 7 ? (
+                        {diagnosticDetails?.consultationUnlocked ? (
                           <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
                             <CheckCircle2 className="w-3.5 h-3.5" /> Janela de 7 dias concluída ({selectedClient.days_since_purchase} dias passados). Agendamento liberado!
                           </span>
@@ -963,17 +983,13 @@ export default function HomePage() {
                   </TabsContent>
 
                   <TabsContent value="comissao" className="m-0">
-                    <Card className="p-4 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 space-y-3 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-slate-500">Comissão Prevista:</span>
-                        <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">
-                          R$ {selectedClient.commission_amount.toFixed(2)}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-400">
-                        Calculada automaticamente (10% do valor líquido) para a consultora {selectedClient.assigned_consultant}.
-                      </p>
-                    </Card>
+                    <ConsultationControl
+                      clientId={selectedClient.id}
+                      role={role}
+                      assignedConsultantId={selectedClient.assigned_consultant_id}
+                      attendants={attendants}
+                      onSaved={() => void fetchClientsFromApi()}
+                    />
                   </TabsContent>
                 </div>
               </Tabs>
@@ -981,6 +997,54 @@ export default function HomePage() {
           )}
         </SheetContent>
       </Sheet>
+
+      <Dialog open={showWhatsappHistoryModal} onOpenChange={setShowWhatsappHistoryModal}>
+        <DialogContent className="sm:max-w-2xl h-[80vh] flex flex-col p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-5 py-4 pr-16 border-b border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <DialogTitle className="flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-emerald-500" /> Histórico de conversa
+                </DialogTitle>
+                <DialogDescription className="mt-1">
+                  {selectedClient?.name} · {selectedClient?.phone || 'Telefone não informado'}
+                </DialogDescription>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={() => void handleFetchWhatsappHistory()} disabled={loadingWhatsappHistory} className="gap-1.5">
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingWhatsappHistory ? 'animate-spin' : ''}`} /> Atualizar
+              </Button>
+            </div>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto bg-slate-100/70 dark:bg-slate-950 p-5 space-y-3">
+            {whatsappMessages.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center gap-2 text-center text-sm text-slate-500">
+                <MessageSquare className="w-8 h-8 text-slate-300 dark:text-slate-700" />
+                <span>Não há histórico de chat para este cliente.</span>
+              </div>
+            ) : whatsappMessages.map((message: any) => (
+              <div key={message.id} className={`flex ${message.fromMe ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[82%] rounded-2xl px-4 py-2.5 shadow-sm ${message.fromMe ? 'bg-emerald-600 text-white rounded-br-sm' : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-sm border border-slate-200 dark:border-slate-700'}`}>
+                  <div className={`flex items-center justify-between gap-4 text-[10px] mb-1 ${message.fromMe ? 'text-emerald-100' : 'text-slate-400'}`}>
+                    <span className="font-semibold">{message.sender}</span>
+                    <span>{message.date ? message.date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Data não informada'}</span>
+                  </div>
+                  {message.text ? (
+                    <p className="text-sm whitespace-pre-wrap break-words">{message.text}</p>
+                  ) : (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium">{message.type}</p>
+                      <details className="text-[10px] opacity-80">
+                        <summary className="cursor-pointer">Ver dados da mensagem</summary>
+                        <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap">{JSON.stringify(message.raw, null, 2)}</pre>
+                      </details>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Contingência Manual Dialog usando shadcn Dialog Component */}
       <Dialog open={showManualModal} onOpenChange={setShowManualModal}>
@@ -1057,7 +1121,7 @@ export default function HomePage() {
 
           <div className="space-y-4 text-xs">
             <p className="text-slate-500">
-              Gerencie a porcentagem de comissão repassada às consultoras para cada produto cadastrado.
+              Gerencie o percentual do valor das consultorias destinado ao Canadá Sem Filtro.
             </p>
 
             <div className="space-y-3">
@@ -1085,7 +1149,6 @@ export default function HomePage() {
                             body: JSON.stringify({
                               product_name: rule.product_name,
                               commission_percentage: val,
-                              user_role: role,
                             }),
                           });
                           fetchAdminData();
@@ -1156,7 +1219,6 @@ export default function HomePage() {
                             primary_client_id: dup.clients[0].id,
                             secondary_client_id: dup.clients[1].id,
                             action: 'dismiss',
-                            user_role: role,
                           }),
                         });
                         fetchAdminData();
@@ -1175,7 +1237,6 @@ export default function HomePage() {
                             primary_client_id: dup.clients[0].id,
                             secondary_client_id: dup.clients[1].id,
                             action: 'merge',
-                            user_role: role,
                           }),
                         });
                         fetchAdminData();

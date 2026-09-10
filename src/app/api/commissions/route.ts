@@ -1,46 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
-    const supabase = await createClient();
+    const authorization = await requireAuth();
+    if (authorization.response) return authorization.response;
+    const { supabase, user, role } = authorization.context;
 
     // 1. Buscar configurações de comissão
     const { data: configs, error: configError } = await (supabase as any)
       .from('commissions_config')
       .select('*')
+      .eq('product_name', 'Consulta Individual')
       .order('product_name', { ascending: true });
+    if (configError) {
+      return NextResponse.json({ error: configError.message }, { status: 500 });
+    }
 
     // 2. Buscar extrato de comissões calculadas
-    const { data: logs, error: logError } = await (supabase as any)
+    let logsQuery = (supabase as any)
       .from('commissions_log')
       .select('*, profiles(name, email)')
       .order('created_at', { ascending: false });
-
-    // Regras padrão se a tabela estiver vazia
-    const defaultConfigs = [
-      {
-        id: 'cfg-1',
-        product_name: '7 Vídeo Aulas + E-book + Diário de Bordo + Diagnóstico',
-        commission_percentage: 10.0,
-        is_active: true,
-      },
-      {
-        id: 'cfg-2',
-        product_name: 'Diagnóstico Migratório',
-        commission_percentage: 15.0,
-        is_active: true,
-      },
-      {
-        id: 'cfg-3',
-        product_name: 'Consultoria Individual',
-        commission_percentage: 12.0,
-        is_active: true,
-      },
-    ];
+    if (role === 'consultant') logsQuery = logsQuery.eq('consultant_id', user.id);
+    const { data: logs, error: logError } = await logsQuery;
+    if (logError) {
+      console.error('Não foi possível carregar o extrato legado de comissões:', logError.message);
+    }
 
     return NextResponse.json({
-      configs: configs && configs.length > 0 ? configs : defaultConfigs,
+      configs: configs || [],
       logs: logs || [],
     });
   } catch (err: any) {
@@ -50,34 +39,33 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const authorization = await requireAuth(['admin']);
+    if (authorization.response) return authorization.response;
+
     const body = await request.json();
-    const { product_name, commission_percentage, is_active, user_role } = body;
+    const { product_name, commission_percentage, is_active } = body;
 
-    // Verificar se o usuário possui papel de Admin
-    if (user_role && user_role !== 'admin') {
+    if (product_name !== 'Consulta Individual' || commission_percentage === undefined) {
       return NextResponse.json(
-        { error: 'Acesso negado. Apenas usuários Administradores podem alterar configurações de comissão.' },
-        { status: 403 }
-      );
-    }
-
-    if (!product_name || commission_percentage === undefined) {
-      return NextResponse.json(
-        { error: 'Nome do produto e porcentagem de comissão são obrigatórios.' },
+        { error: 'A configuração deve ser para Consulta Individual.' },
         { status: 400 }
       );
     }
+    const percentage = Number(commission_percentage);
+    if (!Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
+      return NextResponse.json({ error: 'A porcentagem deve estar entre 0 e 100.' }, { status: 400 });
+    }
 
-    const supabase = await createClient();
+    const { supabase } = authorization.context;
 
     const { data: updatedConfig, error } = await (supabase as any)
       .from('commissions_config')
       .upsert({
         product_name,
-        commission_percentage: Number(commission_percentage),
+        commission_percentage: percentage,
         is_active: is_active ?? true,
         updated_at: new Date().toISOString(),
-      })
+      }, { onConflict: 'product_name' })
       .select()
       .single();
 

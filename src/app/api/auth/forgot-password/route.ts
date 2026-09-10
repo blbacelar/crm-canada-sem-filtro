@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     const { data: sendData, error: sendError } = await resend.emails.send({
       from: fromAddress,
       to: [email.trim()],
-      subject: '🔑 Recuperação de Senha — Canadá Sem Filtro CRM',
+      subject: 'Recuperação de Senha — Canadá Sem Filtro CRM',
       html: buildResetEmailHtml(resetLink, email.trim()),
     });
 
@@ -80,7 +80,7 @@ function buildResetEmailHtml(resetLink: string, email: string): string {
           <tr>
             <td style="padding:32px 40px 24px;text-align:center;background:linear-gradient(135deg,#7f1d1d 0%,#dc2626 100%);">
               <div style="width:52px;height:52px;background:rgba(255,255,255,0.15);border-radius:14px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
-                <span style="font-size:26px;">🧭</span>
+                <span style="font-size:26px;font-weight:700;color:#ffffff;">CSF</span>
               </div>
               <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.3px;">Canadá Sem Filtro</h1>
               <p style="margin:6px 0 0;color:rgba(255,255,255,0.75);font-size:12px;">Central Operacional de Atendimento &amp; Gestão CRM</p>
@@ -103,7 +103,7 @@ function buildResetEmailHtml(resetLink: string, email: string): string {
                 <tr>
                   <td align="center">
                     <a href="${resetLink}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#dc2626,#b91c1c);color:#ffffff;text-decoration:none;border-radius:10px;font-size:14px;font-weight:700;letter-spacing:0.2px;box-shadow:0 4px 14px rgba(220,38,38,0.4);">
-                      🔑 Redefinir Minha Senha
+                      Redefinir Minha Senha
                     </a>
                   </td>
                 </tr>
@@ -122,7 +122,7 @@ function buildResetEmailHtml(resetLink: string, email: string): string {
             <td style="padding:0 40px 28px;">
               <div style="background:#0f172a;border:1px solid #334155;border-radius:10px;padding:16px;">
                 <p style="margin:0;color:#64748b;font-size:12px;line-height:1.6;">
-                  ⚠️ Se você <strong style="color:#94a3b8;">não</strong> solicitou esta redefinição, ignore este e-mail. Sua senha permanece inalterada e sua conta está segura.
+                  Se você <strong style="color:#94a3b8;">não</strong> solicitou esta redefinição, ignore este e-mail. Sua senha permanece inalterada e sua conta está segura.
                 </p>
               </div>
             </td>

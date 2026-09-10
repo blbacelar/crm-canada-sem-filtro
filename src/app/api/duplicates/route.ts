@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
+    const authorization = await requireAuth(['admin']);
+    if (authorization.response) return authorization.response;
+    const { supabase } = authorization.context;
 
     const { data: clients, error } = await (supabase as any)
       .from('clients')
@@ -54,15 +57,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { primary_client_id, secondary_client_id, action, user_role } = body;
+    const authorization = await requireAuth(['admin']);
+    if (authorization.response) return authorization.response;
 
-    if (user_role && user_role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Acesso negado. Apenas administradores podem reconciliar duplicidades.' },
-        { status: 403 }
-      );
-    }
+    const body = await request.json();
+    const { primary_client_id, secondary_client_id, action } = body;
 
     if (!primary_client_id || !secondary_client_id) {
       return NextResponse.json(
@@ -71,7 +70,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
+    const { supabase } = authorization.context;
 
     if (action === 'merge') {
       // Mover compras do cliente secundário para o cliente principal

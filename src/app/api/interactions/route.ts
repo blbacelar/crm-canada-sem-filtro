@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
+    const authorization = await requireAuth(['admin', 'consultant', 'tech']);
+    if (authorization.response) return authorization.response;
+
     const body = await request.json();
-    const { client_id, consultant_id, channel, summary, next_action } = body;
+    const { client_id, channel, summary, next_action } = body;
 
     if (!client_id || !summary) {
       return NextResponse.json(
@@ -13,14 +16,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
+    const { supabase, user } = authorization.context;
 
     // 1. Gravar Interação na Tabela interactions
     const { data: newInteraction, error: interactionError } = await (supabase as any)
       .from('interactions')
       .insert({
         client_id,
-        consultant_id: consultant_id || 'system-consultant',
+        consultant_id: user.id,
         channel: channel || 'whatsapp',
         summary,
         next_action: next_action || null,

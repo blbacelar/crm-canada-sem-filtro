@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/header';
+import { fetchCurrentUser } from '@/lib/client-auth';
 import {
   Shield,
   DollarSign,
@@ -20,6 +21,8 @@ import {
   Briefcase,
   BarChart2,
   UserPlus,
+  Archive,
+  Pencil,
 } from 'lucide-react';
 import { UserRole } from '@/types/database.types';
 import { Button } from '@/components/ui/button';
@@ -34,13 +37,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 export default function SettingsPage() {
   const router = useRouter();
-  const [role, setRole] = React.useState<UserRole>('admin');
+  const [role, setRole] = React.useState<UserRole>('consultant');
+  const [authReady, setAuthReady] = React.useState(false);
   const [loading, setLoading] = React.useState<boolean>(false);
   const [savedSuccess, setSavedSuccess] = React.useState<boolean>(false);
   const [successMessage, setSuccessMessage] = React.useState<string>('');
+  const [operationError, setOperationError] = React.useState<string>('');
 
   // States
   const [commissionRules, setCommissionRules] = React.useState<any[]>([]);
@@ -56,28 +69,46 @@ export default function SettingsPage() {
   const [submittingOp, setSubmittingOp] = React.useState<boolean>(false);
   const [approvingId, setApprovingId] = React.useState<string | null>(null);
   const [pendingApprovalRoles, setPendingApprovalRoles] = React.useState<Record<string, UserRole>>({});
+  const [archivingEmail, setArchivingEmail] = React.useState<string | null>(null);
+  const [archiveTarget, setArchiveTarget] = React.useState<{ email: string; role: UserRole } | null>(null);
+  const [editingOperatorEmail, setEditingOperatorEmail] = React.useState<string | null>(null);
+  const [editingOperatorName, setEditingOperatorName] = React.useState('');
+  const [savingOperatorName, setSavingOperatorName] = React.useState(false);
 
   // SLA States
   const [businessStartHour, setBusinessStartHour] = React.useState<string>('09:00');
   const [businessEndHour, setBusinessEndHour] = React.useState<string>('18:00');
   const [targetSlaHours, setTargetSlaHours] = React.useState<string>('24');
+  const [slaHolidays, setSlaHolidays] = React.useState<string>('');
+  const [slaWeekdays, setSlaWeekdays] = React.useState<number[]>([1, 2, 3, 4, 5]);
+  const weekdays = [
+    { value: 1, label: 'Seg' }, { value: 2, label: 'Ter' }, { value: 3, label: 'Qua' },
+    { value: 4, label: 'Qui' }, { value: 5, label: 'Sex' }, { value: 6, label: 'Sáb' }, { value: 0, label: 'Dom' },
+  ];
 
   React.useEffect(() => {
-    const storedRole = localStorage.getItem('crm_user_role') as UserRole;
-    if (storedRole) setRole(storedRole);
+    fetchCurrentUser().then((user) => {
+      if (!user) return;
+      setRole(user.role as UserRole);
+      setAuthReady(true);
+    });
   }, []);
 
   const fetchSettings = React.useCallback(async () => {
     try {
       setLoading(true);
-      const [commRes, opRes] = await Promise.all([
+      const [commRes, opRes, slaRes] = await Promise.all([
         fetch('/api/commissions'),
         fetch('/api/operators'),
+        fetch('/api/settings', { cache: 'no-store' }),
       ]);
 
       if (commRes.ok) {
         const json = await commRes.json();
         setCommissionRules(json.configs || []);
+      } else {
+        const json = await commRes.json().catch(() => ({}));
+        setOperationError(json.error || 'Não foi possível carregar as regras de comissão.');
       }
 
       if (opRes.ok) {
@@ -88,20 +119,62 @@ export default function SettingsPage() {
         const initialRoles: Record<string, UserRole> = {};
         (json.pendingUsers || []).forEach((u: any) => { initialRoles[u.email] = 'consultant'; });
         setPendingApprovalRoles(initialRoles);
+      } else {
+        const json = await opRes.json().catch(() => ({}));
+        setOperationError(json.error || 'Não foi possível carregar os operadores.');
+      }
+
+      if (slaRes.ok) {
+        const json = await slaRes.json();
+        setBusinessStartHour(json.sla?.businessStart || '09:00');
+        setBusinessEndHour(json.sla?.businessEnd || '18:00');
+        setTargetSlaHours(String(json.sla?.targetHours || 24));
+        setSlaHolidays((json.sla?.holidays || []).join(', '));
+        setSlaWeekdays(Array.isArray(json.sla?.weekdays) ? json.sla.weekdays : [1, 2, 3, 4, 5]);
+      } else {
+        const json = await slaRes.json().catch(() => ({}));
+        setOperationError(json.error || 'Não foi possível carregar as configurações de SLA.');
       }
     } catch (err) {
       console.error('Erro ao carregar configurações:', err);
+      setOperationError('Não foi possível conectar ao servidor de configurações.');
     } finally {
       setLoading(false);
     }
   }, []);
 
+  const handleSaveSla = async () => {
+    const res = await fetch('/api/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        businessStart: businessStartHour,
+        businessEnd: businessEndHour,
+        targetHours: Number(targetSlaHours),
+        weekdays: slaWeekdays,
+        holidays: slaHolidays.split(',').map((holiday) => holiday.trim()).filter(Boolean),
+      }),
+    });
+
+    if (res.ok) {
+      setSavedSuccess(true);
+      setSuccessMessage('Parâmetros de SLA salvos com sucesso!');
+      setTimeout(() => setSavedSuccess(false), 2500);
+    }
+  };
+
   React.useEffect(() => {
+    if (!authReady) return;
     fetchSettings();
-  }, [fetchSettings]);
+  }, [authReady, fetchSettings]);
 
   const handleUpdateCommission = async (productName: string, percentage: number, isActive: boolean = true) => {
     try {
+      if (!Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
+        setOperationError('O percentual deve estar entre 0% e 100%.');
+        return;
+      }
+      setOperationError('');
       const res = await fetch('/api/commissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -109,7 +182,6 @@ export default function SettingsPage() {
           product_name: productName,
           commission_percentage: percentage,
           is_active: isActive,
-          user_role: role,
         }),
       });
 
@@ -118,9 +190,13 @@ export default function SettingsPage() {
         setSuccessMessage('Comissões atualizadas com sucesso!');
         setTimeout(() => setSavedSuccess(false), 2500);
         fetchSettings();
+      } else {
+        const payload = await res.json().catch(() => ({}));
+        setOperationError(payload.error || 'Não foi possível atualizar o percentual da consultoria.');
       }
     } catch (err) {
       console.error('Erro ao atualizar comissão:', err);
+      setOperationError('Não foi possível conectar ao servidor de configurações.');
     }
   };
 
@@ -181,17 +257,63 @@ export default function SettingsPage() {
         setSuccessMessage(json.message || `Papel de ${targetEmail} atualizado com sucesso!`);
         setTimeout(() => setSavedSuccess(false), 3000);
 
-        // Se o email editado for o meu proprio email logado, atualizar local storage
-        const myEmail = localStorage.getItem('crm_user_email');
-        if (myEmail && myEmail.toLowerCase() === targetEmail.toLowerCase()) {
-          localStorage.setItem('crm_user_role', targetRole);
-          setRole(targetRole);
-        }
-
         fetchSettings();
       }
     } catch (err) {
       console.error('Erro ao atualizar papel do operador:', err);
+    }
+  };
+
+  const handleOperatorNameChange = async (operator: any) => {
+    const name = editingOperatorName.trim();
+    if (name.length < 2) return;
+    try {
+      setSavingOperatorName(true);
+      const res = await fetch('/api/operators', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: operator.email, name, role: operator.role, action: 'update_name' }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setOperationError(json.error || 'Não foi possível atualizar o nome.');
+        return;
+      }
+      setSavedSuccess(true);
+      setSuccessMessage(json.message || 'Nome atualizado com sucesso.');
+      setTimeout(() => setSavedSuccess(false), 3000);
+      setEditingOperatorEmail(null);
+      fetchSettings();
+    } finally {
+      setSavingOperatorName(false);
+    }
+  };
+
+  const handleArchiveOperator = async (targetEmail: string, targetRole: UserRole) => {
+    try {
+      setArchivingEmail(targetEmail);
+      const res = await fetch('/api/operators', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: targetEmail, role: targetRole, action: 'archive' }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setSavedSuccess(true);
+        setSuccessMessage(json.message || `${targetEmail} arquivado com sucesso.`);
+        setTimeout(() => setSavedSuccess(false), 3000);
+        fetchSettings();
+      } else {
+        setSuccessMessage(json.error || 'Não foi possível arquivar o usuário.');
+        setSavedSuccess(true);
+        setTimeout(() => setSavedSuccess(false), 3000);
+      }
+    } catch (err) {
+      console.error('Erro ao arquivar usuário:', err);
+    } finally {
+      setArchivingEmail(null);
+      setArchiveTarget(null);
     }
   };
 
@@ -202,6 +324,7 @@ export default function SettingsPage() {
 
     try {
       setSubmittingOp(true);
+      setOperationError('');
       const res = await fetch('/api/operators', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -213,8 +336,8 @@ export default function SettingsPage() {
         }),
       });
 
+      const json = await res.json().catch(() => ({}));
       if (res.ok) {
-        const json = await res.json();
         setSavedSuccess(true);
         setSuccessMessage(json.message || `Operador ${newOpName} adicionado com sucesso!`);
         setTimeout(() => setSavedSuccess(false), 3000);
@@ -223,15 +346,18 @@ export default function SettingsPage() {
         setNewOpEmail('');
         setNewOpRole('consultant');
         fetchSettings();
+      } else {
+        setOperationError(json.error || 'Não foi possível cadastrar o operador.');
       }
     } catch (err) {
       console.error('Erro ao cadastrar operador:', err);
+      setOperationError('Não foi possível conectar ao servidor para cadastrar o operador.');
     } finally {
       setSubmittingOp(false);
     }
   };
 
-  return (
+    return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50 transition-colors">
       <Header currentRole={role} onRoleChange={setRole} />
 
@@ -263,6 +389,11 @@ export default function SettingsPage() {
             <Badge variant="outline" className="bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400 gap-1.5 py-1 px-3">
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>{successMessage || 'Configurações salvas!'}</span>
+            </Badge>
+          )}
+          {operationError && (
+            <Badge variant="outline" className="border-red-500/20 bg-red-500/10 px-3 py-1 text-red-600 dark:text-red-400">
+              {operationError}
             </Badge>
           )}
         </div>
@@ -341,7 +472,7 @@ export default function SettingsPage() {
                         <p className="font-bold text-slate-900 dark:text-slate-100 text-sm">{u.name}</p>
                         <p className="text-slate-500 dark:text-slate-400">{u.email}</p>
                         <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px]">
-                          ⏳ Pendente de Aprovação
+                          <Clock className="mr-1 h-3 w-3" /> Pendente de Aprovação
                         </Badge>
                       </div>
 
@@ -357,9 +488,9 @@ export default function SettingsPage() {
                               <SelectValue placeholder="Atribuir Papel" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="admin">👑 Administradora</SelectItem>
-                              <SelectItem value="consultant">💼 Consultora</SelectItem>
-                              <SelectItem value="marketing">📊 Marketing</SelectItem>
+                              <SelectItem value="admin">Administrador(a)</SelectItem>
+                              <SelectItem value="consultant">Consultor(a)</SelectItem>
+                              <SelectItem value="marketing">Marketing</SelectItem>
                             </SelectContent>
                           </Select>
                           <Button
@@ -413,23 +544,23 @@ export default function SettingsPage() {
                       <Input
                         type="email"
                         required
-                        placeholder="amanda@canadasemfiltro.com"
+                        placeholder="email@canadasemfiltro.ca"
                         value={newOpEmail}
                         onChange={(e) => setNewOpEmail(e.target.value)}
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                        Papel Atribuído (Role)
+                        Função
                       </label>
                       <Select value={newOpRole} onValueChange={(val) => setNewOpRole(val as UserRole)}>
                         <SelectTrigger className="h-10 text-xs">
                           <SelectValue placeholder="Selecione o papel" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="admin">👑 Administradora (Acesso Total)</SelectItem>
-                          <SelectItem value="consultant">💼 Consultora (Atendimento)</SelectItem>
-                          <SelectItem value="marketing">📊 Marketing (Métricas BI)</SelectItem>
+                          <SelectItem value="admin">Administrador(a) (Acesso Total)</SelectItem>
+                          <SelectItem value="consultant">Consultor(a) (Atendimento)</SelectItem>
+                          <SelectItem value="marketing">Marketing (Métricas BI)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -445,12 +576,12 @@ export default function SettingsPage() {
             {/* Tabela de Operadores Cadastrados */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base font-bold flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-purple-500" /> Operadores da Equipe & Permissões Ativas
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Lista de operadores registrados. Administradores podem alterar os papéis dos operadores a qualquer momento.
-                </CardDescription>
+                  <CardTitle className="text-base font-bold flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-purple-500" /> Atendentes e operadores do CRM
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                  Cadastre atendentes com o papel Consultor(a). Eles poderão ser associados aos clientes na fila operacional.
+                  </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 {operators.map((op: any, idx: number) => (
@@ -460,7 +591,21 @@ export default function SettingsPage() {
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <p className="font-bold text-slate-900 dark:text-slate-100 text-sm">{op.name}</p>
+                        {editingOperatorEmail === op.email ? (
+                          <div className="flex items-center gap-1.5">
+                            <Input
+                              autoFocus
+                              value={editingOperatorName}
+                              onChange={(event) => setEditingOperatorName(event.target.value)}
+                              onKeyDown={(event) => { if (event.key === 'Enter') void handleOperatorNameChange(op); if (event.key === 'Escape') setEditingOperatorEmail(null); }}
+                              className="h-7 w-48 text-sm font-semibold"
+                            />
+                            <Button type="button" size="sm" disabled={savingOperatorName} onClick={() => void handleOperatorNameChange(op)} className="h-7 px-2">Salvar</Button>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setEditingOperatorEmail(null)} className="h-7 px-2">Cancelar</Button>
+                          </div>
+                        ) : (
+                          <p className="font-bold text-slate-900 dark:text-slate-100 text-sm">{op.name}</p>
+                        )}
                         <Badge
                           variant="outline"
                           className={
@@ -471,7 +616,10 @@ export default function SettingsPage() {
                               : 'bg-purple-500/10 text-purple-600 border-purple-500/20'
                           }
                         >
-                          {op.role === 'admin' ? '👑 Administradora' : op.role === 'consultant' ? '💼 Consultora' : '📊 Marketing'}
+                          <span className="inline-flex items-center gap-1">
+                            {op.role === 'admin' ? <Crown className="h-3.5 w-3.5" /> : op.role === 'consultant' ? <Briefcase className="h-3.5 w-3.5" /> : <BarChart2 className="h-3.5 w-3.5" />}
+                            {op.role === 'admin' ? 'Administrador(a)' : op.role === 'consultant' ? 'Consultor(a)' : 'Marketing'}
+                          </span>
                         </Badge>
                       </div>
                       <p className="text-slate-500 dark:text-slate-400">{op.email}</p>
@@ -489,12 +637,35 @@ export default function SettingsPage() {
                             <SelectValue placeholder="Papel" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="admin">👑 Administradora</SelectItem>
-                            <SelectItem value="consultant">💼 Consultora</SelectItem>
-                            <SelectItem value="marketing">📊 Marketing</SelectItem>
+                            <SelectItem value="admin">Administrador(a)</SelectItem>
+                            <SelectItem value="consultant">Consultor(a)</SelectItem>
+                            <SelectItem value="marketing">Marketing</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={role !== 'admin' || archivingEmail === op.email}
+                        onClick={() => setArchiveTarget({ email: op.email, role: op.role as UserRole })}
+                        title={role === 'admin' ? 'Arquivar usuário' : 'Apenas administradores podem arquivar usuários'}
+                        className="h-8 gap-1.5 border-amber-500/40 text-amber-700 hover:bg-amber-500/10 disabled:opacity-50 dark:text-amber-300"
+                      >
+                        <Archive className="h-3.5 w-3.5" />
+                        {archivingEmail === op.email ? 'Arquivando...' : 'Arquivar'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={role !== 'admin' || editingOperatorEmail !== null}
+                        onClick={() => { setEditingOperatorEmail(op.email); setEditingOperatorName(op.name || ''); }}
+                        title="Editar nome do operador"
+                        className="h-8 gap-1.5"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -507,21 +678,24 @@ export default function SettingsPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base font-bold flex items-center gap-2">
-                  <DollarSign className="w-4 h-4 text-emerald-500" /> Tabela de Comissões por Produto
+                  <DollarSign className="w-4 h-4 text-emerald-500" /> Retorno por Consulta
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Defina a porcentagem de comissão atribuída automaticamente às consultoras para cada venda efetuada na Hotmart.
+                  A cada consulta concluída, a porcentagem configurada do valor pago retorna para o Canadá Sem Filtro como investimento operacional.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-3">
-                  {commissionRules.map((rule: any, idx: number) => (
+                  {(commissionRules.filter((rule: any) => rule.product_name === 'Consulta Individual').length > 0
+                    ? commissionRules.filter((rule: any) => rule.product_name === 'Consulta Individual')
+                    : [{ id: 'consultation-default', product_name: 'Consulta Individual', commission_percentage: 10, is_active: true }]
+                  ).map((rule: any, idx: number) => (
                     <div
                       key={rule.id || idx}
                       className="p-4 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs"
                     >
                       <div className="space-y-1">
-                        <p className="font-bold text-slate-900 dark:text-slate-100 text-sm">{rule.product_name}</p>
+                        <p className="font-bold text-slate-900 dark:text-slate-100 text-sm">Consulta Individual</p>
                         <div className="flex items-center gap-2 text-slate-400">
                           <span>Status:</span>
                           <Badge variant="outline" className={rule.is_active ? 'bg-emerald-500/10 text-emerald-600' : 'bg-slate-500/10 text-slate-400'}>
@@ -532,13 +706,15 @@ export default function SettingsPage() {
 
                       <div className="flex items-center gap-3 self-end sm:self-auto">
                         <div className="flex items-center gap-2">
-                          <label className="text-slate-500 font-medium">Comissão:</label>
+                          <label className="text-slate-500 font-medium">Percentual para o Canadá Sem Filtro:</label>
                           <Input
                             type="number"
+                            min="0"
+                            max="100"
                             step="0.5"
                             disabled={role !== 'admin'}
                             defaultValue={rule.commission_percentage}
-                            onBlur={(e) => handleUpdateCommission(rule.product_name, parseFloat(e.target.value), rule.is_active)}
+                            onBlur={(e) => handleUpdateCommission('Consulta Individual', parseFloat(e.target.value), rule.is_active)}
                             className="w-20 h-8 text-xs font-bold text-right"
                           />
                           <span className="font-bold text-slate-700 dark:text-slate-300">%</span>
@@ -563,7 +739,7 @@ export default function SettingsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 text-xs">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-slate-500 font-semibold mb-1">Início da Janela Útil</label>
                     <Input value={businessStartHour} onChange={(e) => setBusinessStartHour(e.target.value)} disabled={role !== 'admin'} />
@@ -576,6 +752,34 @@ export default function SettingsPage() {
                     <label className="block text-slate-500 font-semibold mb-1">Meta de Atendimento (Horas Úteis)</label>
                     <Input value={targetSlaHours} onChange={(e) => setTargetSlaHours(e.target.value)} disabled={role !== 'admin'} />
                   </div>
+                  <div>
+                    <label className="block text-slate-500 font-semibold mb-1">Feriados (AAAA-MM-DD)</label>
+                    <Input value={slaHolidays} onChange={(e) => setSlaHolidays(e.target.value)} placeholder="2026-12-25, 2027-01-01" disabled={role !== 'admin'} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-slate-500 font-semibold mb-2">Dias úteis</label>
+                  <div className="flex flex-wrap gap-2">
+                    {weekdays.map((day) => {
+                      const selected = slaWeekdays.includes(day.value);
+                      return (
+                        <button
+                          key={day.value}
+                          type="button"
+                          disabled={role !== 'admin'}
+                          onClick={() => setSlaWeekdays((current) => selected ? current.filter((value) => value !== day.value) : [...current, day.value].sort())}
+                          className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors ${selected ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' : 'border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400'} disabled:cursor-not-allowed disabled:opacity-60`}
+                        >
+                          {day.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <Button type="button" onClick={handleSaveSla} disabled={role !== 'admin'} className="gap-2">
+                    <Save className="h-4 w-4" /> Salvar parâmetros
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -602,6 +806,32 @@ export default function SettingsPage() {
           </TabsContent>
         </Tabs>
       </main>
+
+      <Dialog open={!!archiveTarget} onOpenChange={(open) => !open && setArchiveTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Arquivar usuário?</DialogTitle>
+            <DialogDescription>
+              O e-mail <strong>{archiveTarget?.email}</strong> será removido das listas do CRM e perderá o acesso.
+              O registro será preservado para auditoria.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setArchiveTarget(null)} disabled={!!archivingEmail}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => archiveTarget && handleArchiveOperator(archiveTarget.email, archiveTarget.role)}
+              disabled={!archiveTarget || !!archivingEmail}
+            >
+              <Archive className="mr-2 h-4 w-4" />
+              {archivingEmail ? 'Arquivando...' : 'Confirmar arquivamento'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

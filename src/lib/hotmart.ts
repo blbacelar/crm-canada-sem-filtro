@@ -78,7 +78,15 @@ export function grantsDiagnosticAccess(eventType: string) {
 }
 
 export function parseHotmartWebhook(payload: HotmartWebhookPayload): ParsedHotmartEvent | null {
-  if (!payload || !payload.event || !payload.data) {
+  if (
+    !payload
+    || typeof payload.event !== 'string'
+    || !payload.event.trim()
+    || !payload.data
+    || !payload.data.purchase
+    || !payload.data.purchase.transaction
+    || !payload.data.buyer?.email
+  ) {
     return null;
   }
 

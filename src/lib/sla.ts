@@ -10,14 +10,44 @@ export interface SLACalculationResult {
   targetHours: number;
 }
 
-const BUSINESS_START_HOUR = 9; // 09:00
-const BUSINESS_END_HOUR = 18; // 18:00
-const BUSINESS_HOURS_PER_DAY = BUSINESS_END_HOUR - BUSINESS_START_HOUR; // 9 horas úteis por dia
+export interface SLAScheduleConfig {
+  businessStart?: string;
+  businessEnd?: string;
+  weekdays?: number[];
+  holidays?: string[];
+}
+
+export function isConsultationUnlocked(
+  purchaseDateInput: string | Date | null | undefined,
+  diagnosticSubmittedAt: string | Date | null | undefined,
+  currentDateInput: string | Date = new Date(),
+) {
+  if (!purchaseDateInput || !diagnosticSubmittedAt) return false;
+  const purchaseDate = new Date(purchaseDateInput);
+  const currentDate = new Date(currentDateInput);
+  if (Number.isNaN(purchaseDate.getTime()) || Number.isNaN(currentDate.getTime())) return false;
+  const daysSincePurchase = (currentDate.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24);
+  return daysSincePurchase >= 7;
+}
+
+const DEFAULT_SCHEDULE: Required<SLAScheduleConfig> = {
+  businessStart: '09:00',
+  businessEnd: '18:00',
+  weekdays: [1, 2, 3, 4, 5],
+  holidays: [],
+};
+
+function parseHour(value: string, fallback: number) {
+  const [hours, minutes] = value.split(':').map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return fallback;
+  return hours + minutes / 60;
+}
 
 export function calculateBusinessHoursSLA(
   startDateInput: string | Date,
   targetHours: number = 24,
-  currentDateInput: string | Date = new Date()
+  currentDateInput: string | Date = new Date(),
+  scheduleInput: SLAScheduleConfig = {}
 ): SLACalculationResult {
   const start = new Date(startDateInput);
   const current = new Date(currentDateInput);
@@ -33,21 +63,33 @@ export function calculateBusinessHoursSLA(
 
   let totalBusinessSeconds = 0;
   const cursor = new Date(start);
+  const schedule: Required<SLAScheduleConfig> = {
+    businessStart: scheduleInput.businessStart ?? DEFAULT_SCHEDULE.businessStart,
+    businessEnd: scheduleInput.businessEnd ?? DEFAULT_SCHEDULE.businessEnd,
+    weekdays: scheduleInput.weekdays ?? DEFAULT_SCHEDULE.weekdays,
+    holidays: scheduleInput.holidays ?? DEFAULT_SCHEDULE.holidays,
+  };
+  const businessStartHour = parseHour(schedule.businessStart, 9);
+  const businessEndHour = parseHour(schedule.businessEnd, 18);
+  const holidays = new Set(schedule.holidays);
 
   while (cursor < current) {
     const dayOfWeek = cursor.getDay(); // 0 = Domingo, 6 = Sábado
-    const isBusinessDay = dayOfWeek >= 1 && dayOfWeek <= 5;
+    const dateKey = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
+    const isBusinessDay = schedule.weekdays.includes(dayOfWeek) && !holidays.has(dateKey);
 
     if (isBusinessDay) {
-      const currentHour = cursor.getHours() + cursor.getMinutes() / 60;
-
-      if (currentHour >= BUSINESS_START_HOUR && currentHour < BUSINESS_END_HOUR) {
-        // Incrementa em passos de 15 minutos (900 segundos) para cálculo eficiente e preciso
-        totalBusinessSeconds += 900;
-      }
+      const dayStart = new Date(cursor);
+      dayStart.setHours(Math.floor(businessStartHour), Math.round((businessStartHour % 1) * 60), 0, 0);
+      const dayEnd = new Date(cursor);
+      dayEnd.setHours(Math.floor(businessEndHour), Math.round((businessEndHour % 1) * 60), 0, 0);
+      const overlapStart = Math.max(start.getTime(), dayStart.getTime());
+      const overlapEnd = Math.min(current.getTime(), dayEnd.getTime());
+      if (overlapEnd > overlapStart) totalBusinessSeconds += (overlapEnd - overlapStart) / 1000;
     }
 
-    cursor.setMinutes(cursor.getMinutes() + 15);
+    cursor.setDate(cursor.getDate() + 1);
+    cursor.setHours(0, 0, 0, 0);
   }
 
   const businessHoursElapsed = Math.round((totalBusinessSeconds / 3600) * 10) / 10;

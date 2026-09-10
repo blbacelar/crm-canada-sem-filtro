@@ -15,12 +15,10 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
-import { ThemeToggle } from '@/components/theme-toggle';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { UserRole } from '@/types/database.types';
 import { createClient } from '@/lib/supabase/client';
 
 export default function LoginPage() {
@@ -78,6 +76,10 @@ export default function LoginPage() {
     setSuccess('');
 
     try {
+      // Remove sessões/cookies antigos antes de criar uma nova sessão.
+      // Isso evita que tokens legados com metadados grandes causem HTTP 431.
+      await supabase.auth.signOut({ scope: 'local' });
+
       // 1. Tentar autenticação no Supabase Auth
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
@@ -90,8 +92,7 @@ export default function LoginPage() {
       }
 
       if (data?.user) {
-        const userStatus = data.user.user_metadata?.status;
-        const userMetadataRole = (data.user.user_metadata?.role as UserRole) || 'consultant';
+        const userStatus = data.user.app_metadata?.status;
 
         // Bloquear acesso se status ainda for 'pending'
         if (userStatus === 'pending') {
@@ -102,7 +103,6 @@ export default function LoginPage() {
         }
 
         localStorage.setItem('crm_user_email', data.user.email || email.trim());
-        localStorage.setItem('crm_user_role', userMetadataRole);
         localStorage.setItem('crm_user_name', data.user.user_metadata?.name || '');
 
         setSuccess('Login efetuado com sucesso! Redirecionando...');
@@ -159,9 +159,19 @@ export default function LoginPage() {
         return;
       }
 
+      // Supabase deliberately returns a generic success response for an
+      // already registered e-mail. An empty identities list is the signal
+      // that no new account was created, which otherwise looks like a pending
+      // approval but will never appear in the admin queue.
+      if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        setError('Este e-mail já possui uma conta. Se ela foi arquivada, peça a um Administrador para restaurar o acesso ou use outro e-mail.');
+        await supabase.auth.signOut({ scope: 'local' });
+        return;
+      }
+
       // NÃO redirecionar — mostrar tela de aguardo de aprovação
       setSuccess(
-        `Solicitação enviada com sucesso, ${name}! Sua conta está aguardando aprovação de um Administrador. Você receberá acesso assim que for aprovado.`
+        `Solicitação enviada com sucesso, ${name}! Não é necessário confirmar o e-mail: um Administrador irá aprovar sua conta e liberar o acesso.`
       );
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro ao criar a conta.');
@@ -182,11 +192,11 @@ export default function LoginPage() {
           </div>
           <h2 className="text-xl font-bold text-slate-900 dark:text-slate-50">Aguardando Aprovação</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Sua conta foi criada com sucesso, mas o acesso ao CRM está <strong>pendente de aprovação</strong> por um Administrador.
+            Sua conta foi criada com sucesso. O acesso ao CRM está <strong>pendente de aprovação</strong> por um Administrador.
           </p>
           <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs">
             <p className="font-semibold">O que acontece agora?</p>
-            <p className="mt-1">Um Administrador irá revisar seu cadastro no painel de configurações e liberar seu acesso com o papel correto.</p>
+            <p className="mt-1">Não é necessário confirmar o e-mail. Após a aprovação, o sistema confirma a conta automaticamente e libera o acesso com o papel correto.</p>
           </div>
           <button
             onClick={() => setPendingApproval(false)}
@@ -203,7 +213,6 @@ export default function LoginPage() {
   if (forgotPassword) {
     return (
       <div className="min-h-screen w-full flex flex-col justify-center items-center p-4 bg-slate-50 dark:bg-slate-950 transition-colors relative overflow-hidden">
-        <div className="absolute top-4 right-4 z-10"><ThemeToggle /></div>
         <div className="absolute -top-40 -left-40 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
         <Card className="w-full max-w-md p-4 shadow-2xl border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95">
@@ -277,11 +286,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen w-full flex flex-col justify-center items-center p-4 bg-slate-50 dark:bg-slate-950 transition-colors relative overflow-hidden">
-      {/* Top right theme toggle */}
-      <div className="absolute top-4 right-4 z-10">
-        <ThemeToggle />
-      </div>
-
       {/* Decorative gradient glow */}
       <div className="absolute -top-40 -left-40 w-96 h-96 bg-red-500/10 dark:bg-red-500/5 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-indigo-500/10 dark:bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
@@ -508,7 +512,7 @@ export default function LoginPage() {
                 <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs font-medium flex items-start gap-2">
                   <Clock className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>
-                    Novas contas ficam <strong>pendentes de aprovação</strong>. Um Administrador irá revisar e liberar seu acesso com o papel correto antes de você conseguir entrar no CRM.
+                    Novas contas ficam <strong>pendentes de aprovação</strong>. Não é necessário confirmar o e-mail: após a revisão, o Administrador aprova a conta e o sistema libera o acesso automaticamente.
                   </span>
                 </div>
 

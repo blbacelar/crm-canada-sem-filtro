@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { grantsDiagnosticAccess, parseHotmartWebhook, HotmartWebhookPayload } from '@/lib/hotmart';
 import { normalizedClientIdentity } from '@/lib/normalize-client';
@@ -5,6 +6,9 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { encryptClientRecord } from '@/lib/crypto';
 
 export async function POST(request: NextRequest) {
+  let eventLogId: string | null = null;
+  let supabase: ReturnType<typeof createAdminClient> | null = null;
+
   try {
     const payload: HotmartWebhookPayload = await request.json();
 
@@ -15,8 +19,15 @@ export async function POST(request: NextRequest) {
 
     const expectedHottok = process.env.HOTMART_HOTTOK;
 
-    // Em produção com HOTMART_HOTTOK configurado, validar o token se enviado
-    if (expectedHottok && receivedHottok && receivedHottok !== expectedHottok) {
+    if (!expectedHottok) {
+      console.error('HOTMART_HOTTOK não configurado; webhook recusado por segurança.');
+      return NextResponse.json({ error: 'Webhook não configurado.' }, { status: 500 });
+    }
+
+    const expected = Buffer.from(expectedHottok);
+    const received = Buffer.from(receivedHottok || '');
+    const validToken = expected.length === received.length && crypto.timingSafeEqual(expected, received);
+    if (!validToken) {
       return NextResponse.json(
         { error: 'Não autorizado. Token HOTTOK inválido.' },
         { status: 401 }
@@ -34,7 +45,7 @@ export async function POST(request: NextRequest) {
 
     // Webhooks não possuem sessão de navegador. A escrita é feita no servidor
     // com a chave administrativa, que nunca é exposta ao cliente.
-    const supabase = createAdminClient();
+    supabase = createAdminClient();
 
     // 1. Gravar no Ledger de Eventos (events_log)
     const { data: eventLog, error: logError } = await (supabase as any)
@@ -50,8 +61,19 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (logError) {
-      console.warn('Alerta: Não foi possível gravar em events_log, continuando processamento em memória:', logError);
+      console.error('Não foi possível gravar em events_log:', logError);
+      return NextResponse.json({ error: 'Não foi possível registrar o evento.' }, { status: 503 });
     }
+    eventLogId = eventLog?.id || null;
+
+    const updateEventStatus = async (status: string, errorMessage?: string) => {
+      if (!eventLogId) return;
+      const { error } = await (supabase as any)
+        .from('events_log')
+        .update({ status_processing: status, ...(errorMessage ? { error_message: errorMessage } : {}) })
+        .eq('id', eventLogId);
+      if (error) throw error;
+    };
 
     // 2. Trava de Idempotência: Checar se transação + evento já foram processados
     if (parsedEvent.transactionCode) {
@@ -63,12 +85,7 @@ export async function POST(request: NextRequest) {
         .eq('status_processing', 'processed');
 
       if (existingEvents && existingEvents.length > 0) {
-        if (eventLog?.id) {
-          await (supabase as any)
-            .from('events_log')
-            .update({ status_processing: 'ignored_duplicate' })
-            .eq('id', eventLog.id);
-        }
+        await updateEventStatus('ignored_duplicate');
 
         return NextResponse.json({
           received: true,
@@ -100,48 +117,30 @@ export async function POST(request: NextRequest) {
 
         const clientPayload = encryptClientRecord(rawClientPayload);
 
-        const { data: client } = await (supabase as any)
-          .from('clients')
-          .upsert(clientPayload, { onConflict: 'email' })
-          .select('id')
-          .single();
-
-        if (client) {
-          const clientId = (client as any).id;
-
-          // 4. Gravar Transação na Tabela purchases
-          await (supabase as any).from('purchases').upsert({
-            client_id: clientId,
+        // Cliente, compra e permissão de diagnóstico são aplicados em uma
+        // única transação PostgreSQL para evitar gravações parciais.
+        const { error: processError } = await (supabase as any).rpc('process_hotmart_event', {
+          p_client: clientPayload,
+          p_purchase: {
             transaction_code: parsedEvent.transactionCode,
             product_name: parsedEvent.productName,
             price_gross: parsedEvent.priceGross,
             price_net: parsedEvent.priceNet,
             status_hotmart: parsedEvent.eventType,
             purchase_date: parsedEvent.purchaseDate,
-          }, { onConflict: 'transaction_code' });
-        }
-
-        // A permissão do diagnóstico é um efeito idempotente da compra aprovada.
-        if (grantsDiagnosticAccess(parsedEvent.eventType)) {
-          await (supabase as any)
-            .from('allowed_emails')
-            .upsert(
-              { email: parsedEvent.buyerEmail.toLowerCase().trim() },
-              { onConflict: 'email', ignoreDuplicates: true },
-            );
-        }
+          },
+          p_allowed_email: grantsDiagnosticAccess(parsedEvent.eventType)
+            ? parsedEvent.buyerEmail.toLowerCase().trim()
+            : null,
+        });
+        if (processError) throw processError;
       } catch (dbErr) {
-        console.warn('Aviso no upsert de cliente/compra no webhook:', dbErr);
+        throw dbErr;
       }
     }
 
     // Atualizar status do log no Ledger para 'processed'
-    if (eventLog?.id) {
-      await (supabase as any)
-        .from('events_log')
-        .update({ status_processing: 'processed' })
-        .eq('id', eventLog.id);
-    }
+    await updateEventStatus('processed');
 
     return NextResponse.json({
       received: true,
@@ -151,10 +150,17 @@ export async function POST(request: NextRequest) {
     });
   } catch (err: any) {
     console.error('Erro no processamento do webhook Hotmart:', err);
+    if (supabase && eventLogId) {
+      const { error: statusError } = await (supabase as any)
+        .from('events_log')
+        .update({ status_processing: 'error', error_message: err.message || 'Erro de processamento' })
+        .eq('id', eventLogId);
+      if (statusError) console.error('Falha ao marcar webhook como erro:', statusError);
+    }
     return NextResponse.json({
       received: true,
-      status: 'error_fallback',
-      message: err.message || 'Erro contornado',
-    });
+      status: 'error',
+      message: 'Erro no processamento do webhook.',
+    }, { status: 500 });
   }
 }

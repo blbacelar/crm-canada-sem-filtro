@@ -2,4 +2,10 @@
 .DS_Store
 node_modules/
 .next/
+.next-e2e/
 *.tsbuildinfo
+supabase/.temp/
+test-results/
+playwright-report/
+screenshot.png
+contatos.json
