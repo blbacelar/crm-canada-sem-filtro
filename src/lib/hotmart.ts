@@ -2,13 +2,13 @@ import { JourneyState } from '@/types/database.types';
 
 export interface HotmartWebhookPayload {
   id?: string;
-  creation_date?: number;
+  creation_date?: number | string;
   event: string;
   version?: string;
   hottok?: string;
   data: {
     product?: {
-      id?: number;
+      id?: number | string;
       name?: string;
     };
     buyer?: {
@@ -31,6 +31,7 @@ export interface HotmartWebhookPayload {
     purchase?: {
       transaction?: string;
       order_date?: number | string;
+      approved_date?: number | string;
       status?: string;
       price?: {
         value?: number;
@@ -46,6 +47,9 @@ export interface HotmartWebhookPayload {
 export interface ParsedHotmartEvent {
   eventType: string;
   transactionCode: string;
+  productId: number | null;
+  eventOccurredAt: string;
+  approvedAt: string | null;
   buyerName: string;
   buyerEmail: string;
   buyerPhone: string | null;
@@ -77,6 +81,15 @@ export function grantsDiagnosticAccess(eventType: string) {
   return ACCESS_GRANTING_EVENTS.has(eventType.trim().toUpperCase());
 }
 
+function parseHotmartDate(value: number | string | undefined): string | null {
+  if (value === undefined || value === '') return null;
+  const numeric = Number(value);
+  const date = Number.isFinite(numeric)
+    ? new Date(numeric < 1_000_000_000_000 ? numeric * 1000 : numeric)
+    : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 export function parseHotmartWebhook(payload: HotmartWebhookPayload): ParsedHotmartEvent | null {
   if (
     !payload
@@ -97,6 +110,14 @@ export function parseHotmartWebhook(payload: HotmartWebhookPayload): ParsedHotma
   const product = data.product || {};
 
   const eventType = payload.event.toUpperCase();
+  const productId = Number(product.id);
+  const eventOccurredAt = parseHotmartDate(payload.creation_date)
+    || parseHotmartDate(purchase.approved_date)
+    || parseHotmartDate(purchase.order_date)
+    || new Date().toISOString();
+  const approvedAt = grantsDiagnosticAccess(eventType)
+    ? parseHotmartDate(purchase.approved_date) || eventOccurredAt
+    : null;
   const transactionCode = purchase.transaction || payload.id || `TX-${Date.now()}`;
   const buyerName = buyer.name || 'Cliente Hotmart';
   const buyerEmail = buyer.email ? buyer.email.toLowerCase().trim() : '';
@@ -114,9 +135,7 @@ export function parseHotmartWebhook(payload: HotmartWebhookPayload): ParsedHotma
   const productName = product.name || 'Produto Canadá Sem Filtro';
   const priceGross = purchase.price?.value || 0;
   const priceNet = purchase.original_offer_price?.value || priceGross * 0.9;
-  const purchaseDate = purchase.order_date
-    ? new Date(purchase.order_date).toISOString()
-    : new Date().toISOString();
+  const purchaseDate = parseHotmartDate(purchase.order_date) || eventOccurredAt;
 
   let mappedJourneyState: JourneyState = 'compra';
 
@@ -131,6 +150,9 @@ export function parseHotmartWebhook(payload: HotmartWebhookPayload): ParsedHotma
   return {
     eventType,
     transactionCode,
+    productId: Number.isSafeInteger(productId) && productId > 0 ? productId : null,
+    eventOccurredAt,
+    approvedAt,
     buyerName,
     buyerEmail,
     buyerPhone,

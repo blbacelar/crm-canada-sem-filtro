@@ -123,13 +123,16 @@ export async function POST(request: NextRequest) {
           p_client: clientPayload,
           p_purchase: {
             transaction_code: parsedEvent.transactionCode,
+            product_id: parsedEvent.productId,
             product_name: parsedEvent.productName,
             price_gross: parsedEvent.priceGross,
             price_net: parsedEvent.priceNet,
             status_hotmart: parsedEvent.eventType,
             purchase_date: parsedEvent.purchaseDate,
+            event_occurred_at: parsedEvent.eventOccurredAt,
+            approved_at: parsedEvent.approvedAt,
           },
-          p_allowed_email: grantsDiagnosticAccess(parsedEvent.eventType)
+          p_allowed_email: parsedEvent.productId !== null && grantsDiagnosticAccess(parsedEvent.eventType)
             ? parsedEvent.buyerEmail.toLowerCase().trim()
             : null,
         });

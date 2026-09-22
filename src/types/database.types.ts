@@ -67,6 +67,7 @@ export interface Database {
           status_journey: JourneyState;
           is_overdue: boolean;
           assigned_consultant_id: string | null;
+          access_expires_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -88,6 +89,7 @@ export interface Database {
           status_journey?: JourneyState;
           is_overdue?: boolean;
           assigned_consultant_id?: string | null;
+          access_expires_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -108,6 +110,7 @@ export interface Database {
           status_journey?: JourneyState;
           is_overdue?: boolean;
           assigned_consultant_id?: string | null;
+          access_expires_at?: string | null;
           updated_at?: string;
         };
       };
@@ -120,6 +123,9 @@ export interface Database {
           price_gross: number;
           price_net: number;
           status_hotmart: string;
+          product_id: number | null;
+          last_event_at: string | null;
+          access_expires_at: string | null;
           purchase_date: string;
           created_at: string;
         };
@@ -131,11 +137,17 @@ export interface Database {
           price_gross: number;
           price_net: number;
           status_hotmart: string;
+          product_id?: number | null;
+          last_event_at?: string | null;
+          access_expires_at?: string | null;
           purchase_date: string;
           created_at?: string;
         };
         Update: {
           status_hotmart?: string;
+          product_id?: number | null;
+          last_event_at?: string | null;
+          access_expires_at?: string | null;
         };
       };
       interactions: {
