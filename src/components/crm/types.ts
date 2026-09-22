@@ -21,6 +21,7 @@ export interface MockClient {
   assigned_consultant: string;
   assigned_consultant_id?: string | null;
   purchase_date: string;
+  access_expires_at?: string | null;
   price_gross: number;
   price_net: number;
   diagnostic_status: 'pendente' | 'enviado' | 'analisado';

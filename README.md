@@ -173,17 +173,23 @@ Antes de liberar o CRM, aplique todas as migrations versionadas no projeto Supab
 
 Para conectar a Hotmart ao CRM em tempo real:
 
-1. Acesse o **Hotmart Developer Central** (Ferramentas > Webhook).
-2. Cadastre o novo endpoint de Webhook apontando para:
+1. Acesse **Ferramentas > Webhook** na Hotmart e abra a configuração existente **CRM - Canada Sem Filtro**. Ela usa **All products**, portanto também cobre o produto `8575181`.
+2. Confirme que o endpoint é:
    ```
-   https://seu-dominio.com/api/webhooks/hotmart
+   https://crm-canada-sem-filtro.vercel.app/api/webhooks/hotmart
    ```
-3. Selecione os seguintes eventos de envio:
+3. Confirme que os eventos incluem:
    - `PURCHASE_APPROVED` (Compra Aprovada)
    - `PURCHASE_COMPLETE` (Compra Concluída)
    - `PURCHASE_CANCELED` (Compra Cancelada)
    - `PURCHASE_REFUNDED` (Compra Reembolsada)
+   - `PURCHASE_CHARGEBACK` (Chargeback)
+   - `PURCHASE_EXPIRED` (Compra Expirada)
 4. Cole o token de verificação `HOTTOK` fornecido pela Hotmart na variável de ambiente `HOTMART_HOTTOK`.
+
+O produto `8575181` concede acesso por um ano civil a partir da aprovação do
+pagamento. O vencimento aparece na ficha do cliente e é aplicado pelo banco às
+consultas do Diário de Bordo, inclusive em sessões já abertas.
 
 ---
 

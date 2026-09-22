@@ -20,5 +20,6 @@ jobs:
       - run: npm exec tsc -- --noEmit
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e:api -- --reporter=line
+      - run: npm run test:webhook -- --reporter=line
       - run: npm run test:e2e:smoke -- --reporter=line
       - run: npm run test:sla -- --reporter=line

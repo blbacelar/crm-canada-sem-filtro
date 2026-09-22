@@ -12,7 +12,7 @@
     "test:e2e:smoke": "playwright test tests/auth.spec.ts --grep @smoke",
     "test:e2e:auth": "playwright test tests/auth.spec.ts --grep @auth",
     "test:sla": "playwright test tests/sla.spec.ts",
-    "test:webhook": "playwright test tests/webhook.spec.ts"
+    "test:webhook": "playwright test tests/webhook.spec.ts tests/hotmart-access.spec.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.23",

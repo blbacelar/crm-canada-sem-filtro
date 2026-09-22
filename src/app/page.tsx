@@ -279,6 +279,7 @@ export default function HomePage() {
           assigned_consultant_id: c.assigned_consultant_id || null,
           assigned_consultant: c.assigned_consultant_name || (c.assigned_consultant_id ? 'Atendente Designado' : 'Pendente'),
           purchase_date: c.purchase_date || c.created_at || new Date().toISOString(),
+          access_expires_at: c.access_expires_at || null,
           price_gross: typeof c.price_gross === 'number' ? c.price_gross : 197.0,
           price_net: typeof c.price_net === 'number' ? c.price_net : 169.20,
           diagnostic_status: c.diagnostic_status || (c.status_journey === 'compra' ? 'pendente' : 'enviado'),
@@ -702,6 +703,14 @@ export default function HomePage() {
                             {new Date(selectedClient.purchase_date).toLocaleDateString('pt-BR')}
                           </p>
                         </div>
+                        {selectedClient.access_expires_at && (
+                          <div>
+                            <span className="text-slate-400">Acesso ao produto 8575181 até:</span>
+                            <p className="font-semibold text-slate-900 dark:text-slate-100">
+                              {new Date(selectedClient.access_expires_at).toLocaleDateString('pt-BR')}
+                            </p>
+                          </div>
+                        )}
                         <div>
                           <span className="text-slate-400">Atendente responsável:</span>
                           {role === 'admin' ? (
