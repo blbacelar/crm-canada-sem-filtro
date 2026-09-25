@@ -4,6 +4,10 @@ create role authenticated;
 create role service_role;
 
 create schema auth;
+create type public.journey_state as enum (
+  'compra', 'diagnostico_enviado', 'acompanhamento', 'consulta_marcada',
+  'consulta_concluida', 'cancelamento', 'reembolso'
+);
 create function auth.uid() returns uuid language sql stable as $$
   select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
 $$;
@@ -28,7 +32,7 @@ create table public.clients (
   district text,
   number text,
   complement text,
-  status_journey text default 'compra',
+  status_journey public.journey_state default 'compra',
   updated_at timestamptz default now()
 );
 

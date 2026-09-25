@@ -20,6 +20,9 @@ begin
 
   select access_expires_at into v_expiry
   from public.clients where email = v_email;
+  if (select status_journey from public.clients where email = v_email) <> 'compra'::public.journey_state then
+    raise exception 'Hotmart event did not persist the enum journey state';
+  end if;
   if v_expiry is distinct from v_start + interval '1 year' then
     raise exception 'Annual access expiry was not set from approval date';
   end if;
