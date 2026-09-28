@@ -1,4 +1,4 @@
-import { get as httpsGet } from 'node:https';
+import https from 'node:https';
 
 const AUTH_URL = 'https://api-sec-vlc.hotmart.com/security/oauth/token';
 const SALES_URL = 'https://developers.hotmart.com/payments/api/v1/sales';
@@ -33,6 +33,35 @@ export interface HotmartSale {
 interface HotmartPage<T> {
   items?: T[];
   page_info?: { next_page_token?: string; total_results?: number };
+}
+
+function getJson(url: URL, accessToken: string): Promise<{ status: number; body: unknown }> {
+  return new Promise((resolve, reject) => {
+    // Native HTTPS avoids the Next/Vercel fetch wrapper, which makes Hotmart's
+    // sales endpoint return HTTP 400 even when the same request succeeds here.
+    const request = https.get(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+    }, (response) => {
+      const chunks: Buffer[] = [];
+      response.on('data', (chunk: Buffer | string) => chunks.push(Buffer.from(chunk)));
+      response.on('error', reject);
+      response.on('end', () => {
+        let body: unknown = null;
+        try {
+          body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        } catch {
+          // The caller reports an invalid response without exposing its body.
+        }
+        resolve({ status: response.statusCode || 0, body });
+      });
+    });
+    request.setTimeout(20000, () => request.destroy(new Error('timeout')));
+    request.on('error', reject);
+  });
 }
 
 export class HotmartApi {
@@ -72,29 +101,21 @@ export class HotmartApi {
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${this.accessToken}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        cache: 'no-store',
-        signal: AbortSignal.timeout(20000),
-      });
-      if ((response.status === 429 || response.status >= 500) && attempt < 2) {
+      const { status, body } = await getJson(url, this.accessToken);
+      if ((status === 429 || status >= 500) && attempt < 2) {
         await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
         continue;
       }
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => null) as Record<string, unknown> | null;
+      if (status < 200 || status >= 300) {
+        const errorBody = body && typeof body === 'object' ? body as Record<string, unknown> : null;
         const detail = [errorBody?.error_description, errorBody?.message, errorBody?.error]
           .filter((value): value is string => typeof value === 'string')
           .join(' | ');
-        throw new Error(`Hotmart ${path} retornou HTTP ${response.status}${detail ? `: ${detail.slice(0, 240)}` : ''}.`);
+        throw new Error(`Hotmart ${path} retornou HTTP ${status}${detail ? `: ${detail.slice(0, 240)}` : ''}.`);
       }
-      const body = await response.json() as HotmartPage<T>;
-      if (!Array.isArray(body.items)) throw new Error(`Resposta inválida da Hotmart em ${path}.`);
-      return body;
+      const page = body as HotmartPage<T> | null;
+      if (!Array.isArray(page?.items)) throw new Error(`Resposta inválida da Hotmart em ${path}.`);
+      return page;
     }
     throw new Error(`Hotmart ${path} excedeu o limite de tentativas.`);
   }
@@ -131,24 +152,6 @@ export class HotmartApi {
 
   async checkHistoryAccess(): Promise<void> {
     await this.get<HotmartSale>('history', {});
-  }
-
-  async checkHistoryAccessWithoutFetch(): Promise<number> {
-    return new Promise((resolve, reject) => {
-      const request = httpsGet(`${SALES_URL}/history`, {
-        headers: {
-          Authorization: `Bearer ${this.accessToken}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-      }, (response) => {
-        response.resume();
-        response.on('end', () => resolve(response.statusCode || 0));
-        response.on('error', reject);
-      });
-      request.setTimeout(20000, () => request.destroy(new Error('timeout')));
-      request.on('error', reject);
-    });
   }
 
   async saleDetail<T>(path: 'users' | 'commissions' | 'price/details', transaction: string): Promise<T | null> {
