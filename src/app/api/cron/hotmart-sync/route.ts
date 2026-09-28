@@ -4,8 +4,6 @@ import { syncHotmartSales } from '@/lib/hotmart-sync';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
-// Run the reconciliation closer to Hotmart's Brazilian API infrastructure.
-export const preferredRegion = 'gru1';
 
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
