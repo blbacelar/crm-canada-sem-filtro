@@ -19,6 +19,20 @@ export async function GET(request: NextRequest) {
     const summary = await syncHotmartSales();
     return NextResponse.json({ synced: true, ...summary });
   } catch (error) {
+    const credentialValues = [
+      process.env.HOTMART_CLIENT_ID || '',
+      process.env.HOTMART_CLIENT_SECRET || '',
+      process.env.HOTMART_BASIC_TOKEN || '',
+    ];
+    const fingerprint = (values: string[]) => crypto.createHash('sha256')
+      .update(JSON.stringify(values)).digest('hex').slice(0, 24);
+    const normalizedValues = credentialValues.map((value) => value.trim());
+    normalizedValues[2] = normalizedValues[2].replace(/^Basic\s+/i, '');
+    console.error('Auditoria temporária Hotmart:', {
+      rawFingerprint: fingerprint(credentialValues),
+      normalizedFingerprint: fingerprint(normalizedValues),
+      surroundingWhitespace: credentialValues.map((value) => value !== value.trim()),
+    });
     console.error('Falha na conciliação Hotmart:', error);
     return NextResponse.json({ error: 'A conciliação Hotmart falhou.' }, { status: 500 });
   }
