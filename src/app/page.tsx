@@ -55,6 +55,7 @@ import { OperationalSummary } from '@/components/crm/operational-summary';
 import { OperationalQueueTable } from '@/components/crm/operational-queue-table';
 import { ConsultationControl } from '@/components/crm/consultation-control';
 import { fetchCurrentUser } from '@/lib/client-auth';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 function normalizeWhatsappHistory(history: any) {
   if (!history) return [];
@@ -126,6 +127,18 @@ const diagnosticValueLabels: Record<string, string> = {
   small: 'Pequena',
   medium: 'Média',
   large: 'Grande',
+};
+
+const purchaseStatusLabels: Record<string, string> = {
+  PURCHASE_APPROVED: 'Pago',
+  PURCHASE_COMPLETE: 'Pago',
+  PURCHASE_COMPLETED: 'Pago',
+  APPROVED: 'Pago',
+  COMPLETE: 'Pago',
+  PURCHASE_BILLET_PRINTED: 'Pagamento pendente',
+  PURCHASE_REFUNDED: 'Estornado',
+  PURCHASE_CANCELED: 'Cancelado',
+  PURCHASE_CHARGEBACK: 'Contestado',
 };
 
 function translateDiagnosticStatus(status: unknown) {
@@ -273,6 +286,7 @@ export default function HomePage() {
           number: c.number,
           complement: c.complement,
           product: c.product_name || '7 Vídeo Aulas + E-book + Diário de Bordo + Diagnóstico',
+          purchases: Array.isArray(c.purchases) ? c.purchases : [],
           status_journey: (c.status_journey || c.effective_status_journey || 'compra') as JourneyState,
           sla_hours_left: typeof c.sla_hours_left === 'number' ? c.sla_hours_left : 24,
           is_overdue: !!c.is_overdue,
@@ -400,10 +414,13 @@ export default function HomePage() {
     const name = client.name || '';
     const email = client.email || '';
     const product = client.product || '';
+    const matchesTransaction = client.purchases.some((purchase) =>
+      purchase.transaction_code.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesSearch =
       name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.toLowerCase().includes(searchQuery.toLowerCase());
+      product.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      matchesTransaction;
 
     if (statusFilter === 'overdue') return matchesSearch && client.is_overdue;
     if (statusFilter !== 'todos') return matchesSearch && client.status_journey === statusFilter;
@@ -737,6 +754,39 @@ export default function HomePage() {
                           )}
                         </div>
                       </div>
+                    </Card>
+
+                    <Card className="overflow-hidden border-slate-200 dark:border-slate-800">
+                      <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Histórico de compras</h3>
+                      </div>
+                      {selectedClient.purchases.length ? (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Compra</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead>Valor</TableHead>
+                              <TableHead>Transação</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {selectedClient.purchases.map((purchase) => (
+                              <TableRow key={purchase.id} className="cursor-default">
+                                <TableCell>
+                                  <div className="font-semibold">{purchase.product_name}</div>
+                                  <div className="text-slate-500">{new Date(purchase.purchase_date).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</div>
+                                </TableCell>
+                                <TableCell>{purchaseStatusLabels[purchase.status_hotmart] || purchase.status_hotmart.replaceAll('_', ' ')}</TableCell>
+                                <TableCell>{purchase.price_gross === null ? '—' : `R$ ${purchase.price_gross.toFixed(2)}`}</TableCell>
+                                <TableCell className="font-mono text-[11px]">{purchase.transaction_code}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      ) : (
+                        <p className="p-4 text-xs text-slate-500">Nenhuma compra registrada para este cliente.</p>
+                      )}
                     </Card>
 
                     {/* Card de Endereço e Cadastro Completo (Hotmart Buyer Data) */}
