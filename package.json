@@ -12,7 +12,8 @@
     "test:e2e:smoke": "playwright test tests/auth.spec.ts --grep @smoke",
     "test:e2e:auth": "playwright test tests/auth.spec.ts --grep @auth",
     "test:sla": "playwright test tests/sla.spec.ts",
-    "test:webhook": "playwright test tests/webhook.spec.ts tests/hotmart-access.spec.ts"
+    "test:webhook": "playwright test tests/webhook.spec.ts tests/hotmart-access.spec.ts",
+    "sync:hotmart": "tsx scripts/sync-hotmart.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.23",
@@ -42,6 +43,7 @@
     "autoprefixer": "^10.4.20",
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.3"
   }
 }

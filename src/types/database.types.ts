@@ -120,12 +120,19 @@ export interface Database {
           client_id: string;
           transaction_code: string;
           product_name: string;
-          price_gross: number;
-          price_net: number;
+          price_gross: number | null;
+          price_net: number | null;
           status_hotmart: string;
           product_id: number | null;
           last_event_at: string | null;
           access_expires_at: string | null;
+          payment_method: string | null;
+          installments: number | null;
+          currency_code: string | null;
+          offer_code: string | null;
+          is_subscription: boolean | null;
+          hotmart_fee: number | null;
+          hotmart_synced_at: string | null;
           purchase_date: string;
           created_at: string;
         };
@@ -134,12 +141,19 @@ export interface Database {
           client_id: string;
           transaction_code: string;
           product_name: string;
-          price_gross: number;
-          price_net: number;
+          price_gross: number | null;
+          price_net: number | null;
           status_hotmart: string;
           product_id?: number | null;
           last_event_at?: string | null;
           access_expires_at?: string | null;
+          payment_method?: string | null;
+          installments?: number | null;
+          currency_code?: string | null;
+          offer_code?: string | null;
+          is_subscription?: boolean | null;
+          hotmart_fee?: number | null;
+          hotmart_synced_at?: string | null;
           purchase_date: string;
           created_at?: string;
         };
@@ -148,6 +162,13 @@ export interface Database {
           product_id?: number | null;
           last_event_at?: string | null;
           access_expires_at?: string | null;
+          payment_method?: string | null;
+          installments?: number | null;
+          currency_code?: string | null;
+          offer_code?: string | null;
+          is_subscription?: boolean | null;
+          hotmart_fee?: number | null;
+          hotmart_synced_at?: string | null;
         };
       };
       interactions: {
@@ -273,6 +294,47 @@ export interface Database {
         Update: {
           status_processing?: 'pending' | 'processed' | 'error' | 'ignored_duplicate';
           error_message?: string | null;
+        };
+      };
+      hotmart_sale_snapshots: {
+        Row: {
+          transaction_code: string;
+          history: Json;
+          participants: Json | null;
+          commissions: Json | null;
+          price_details: Json | null;
+          synced_at: string;
+        };
+        Insert: {
+          transaction_code: string;
+          history: Json;
+          participants?: Json | null;
+          commissions?: Json | null;
+          price_details?: Json | null;
+          synced_at?: string;
+        };
+        Update: {
+          history?: Json;
+          participants?: Json | null;
+          commissions?: Json | null;
+          price_details?: Json | null;
+          synced_at?: string;
+        };
+      };
+      hotmart_sync_state: {
+        Row: {
+          key: string;
+          backfill_before: string;
+          updated_at: string;
+        };
+        Insert: {
+          key: string;
+          backfill_before: string;
+          updated_at?: string;
+        };
+        Update: {
+          backfill_before?: string;
+          updated_at?: string;
         };
       };
     };
