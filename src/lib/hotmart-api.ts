@@ -79,7 +79,12 @@ export class HotmartApi {
         await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
         continue;
       }
-      if (!response.ok) throw new Error(`Hotmart ${path} retornou HTTP ${response.status}.`);
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => null) as Record<string, unknown> | null;
+        const detail = [errorBody?.error, errorBody?.message, errorBody?.error_description]
+          .find((value): value is string => typeof value === 'string');
+        throw new Error(`Hotmart ${path} retornou HTTP ${response.status}${detail ? `: ${detail.slice(0, 240)}` : ''}.`);
+      }
       const body = await response.json() as HotmartPage<T>;
       if (!Array.isArray(body.items)) throw new Error(`Resposta inválida da Hotmart em ${path}.`);
       return body;

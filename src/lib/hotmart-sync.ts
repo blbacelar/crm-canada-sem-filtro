@@ -193,8 +193,12 @@ export async function syncHotmartSales(options: { dryRun?: boolean } = {}): Prom
 
   const scanRange = async (startDate: Date, endDate: Date) => {
     for (const status of HOTMART_SALE_STATUSES) {
-      for await (const sale of api.salesByStatus(status, { startDate, endDate })) {
-        await processSale(sale);
+      try {
+        for await (const sale of api.salesByStatus(status, { startDate, endDate })) {
+          await processSale(sale);
+        }
+      } catch (error) {
+        throw new Error(`Consulta Hotmart ${status} ${startDate.toISOString()}–${endDate.toISOString()}: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
       }
     }
     summary.windowsScanned += 1;
