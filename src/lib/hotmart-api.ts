@@ -1,3 +1,5 @@
+import { get as httpsGet } from 'node:https';
+
 const AUTH_URL = 'https://api-sec-vlc.hotmart.com/security/oauth/token';
 const SALES_URL = 'https://developers.hotmart.com/payments/api/v1/sales';
 
@@ -129,6 +131,24 @@ export class HotmartApi {
 
   async checkHistoryAccess(): Promise<void> {
     await this.get<HotmartSale>('history', {});
+  }
+
+  async checkHistoryAccessWithoutFetch(): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const request = httpsGet(`${SALES_URL}/history`, {
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+      }, (response) => {
+        response.resume();
+        response.on('end', () => resolve(response.statusCode || 0));
+        response.on('error', reject);
+      });
+      request.setTimeout(20000, () => request.destroy(new Error('timeout')));
+      request.on('error', reject);
+    });
   }
 
   async saleDetail<T>(path: 'users' | 'commissions' | 'price/details', transaction: string): Promise<T | null> {
