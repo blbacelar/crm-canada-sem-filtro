@@ -81,8 +81,9 @@ export class HotmartApi {
       }
       if (!response.ok) {
         const errorBody = await response.json().catch(() => null) as Record<string, unknown> | null;
-        const detail = [errorBody?.error, errorBody?.message, errorBody?.error_description]
-          .find((value): value is string => typeof value === 'string');
+        const detail = [errorBody?.error_description, errorBody?.message, errorBody?.error]
+          .filter((value): value is string => typeof value === 'string')
+          .join(' | ');
         throw new Error(`Hotmart ${path} retornou HTTP ${response.status}${detail ? `: ${detail.slice(0, 240)}` : ''}.`);
       }
       const body = await response.json() as HotmartPage<T>;
