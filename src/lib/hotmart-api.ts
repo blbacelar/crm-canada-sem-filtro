@@ -133,7 +133,9 @@ export class HotmartApi {
     const recentStart = new Date(recentEnd.getTime() - 24 * 60 * 60 * 1000);
     const base = { transaction_status: 'APPROVED', max_results: '100' };
     const cases: Record<string, Record<string, string>> = {
+      bare_history: {},
       no_filters: { max_results: '100' },
+      known_transaction: { transaction: 'HP1517625102' },
       status_only: base,
       start_only: { ...base, start_date: String(startDate.getTime()) },
       end_only: { ...base, end_date: String(endDate.getTime()) },
