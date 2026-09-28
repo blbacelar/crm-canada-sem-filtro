@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "src/app/api/cron/hotmart-sync/route.ts": {
+      "regions": ["gru1"]
+    }
+  },
   "crons": [
     { "path": "/api/cron/hotmart-sync", "schedule": "0 6 * * *" }
   ]
