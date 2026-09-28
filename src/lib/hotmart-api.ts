@@ -71,7 +71,11 @@ export class HotmartApi {
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${this.accessToken}` },
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
         cache: 'no-store',
         signal: AbortSignal.timeout(20000),
       });
