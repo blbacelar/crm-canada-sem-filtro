@@ -206,6 +206,11 @@ export async function syncHotmartSales(options: { dryRun?: boolean } = {}): Prom
           } catch (probeError) {
             bareHistory = `; consulta sem filtros: ${probeError instanceof Error ? probeError.message : 'erro desconhecido'}`;
           }
+          try {
+            bareHistory += `; consulta HTTPS nativa: HTTP ${await api.checkHistoryAccessWithoutFetch()}`;
+          } catch (probeError) {
+            bareHistory += `; consulta HTTPS nativa: ${probeError instanceof Error ? probeError.message : 'erro desconhecido'}`;
+          }
         }
         throw new Error(`Consulta Hotmart ${status} ${startDate.toISOString()}–${endDate.toISOString()}: ${error instanceof Error ? error.message : 'Erro desconhecido'}${bareHistory}`);
       }
