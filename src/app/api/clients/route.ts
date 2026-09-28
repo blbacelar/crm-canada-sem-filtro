@@ -19,6 +19,18 @@ export async function GET(request: NextRequest) {
     const offset = Math.max(Number(searchParams.get('offset') || 0), 0);
     const status = searchParams.get('status');
     const search = searchParams.get('search')?.trim().replace(/[%,()]/g, '');
+    let purchaseClientIds: string[] = [];
+    if (search && /^(HP|MANUAL-|TX-)/i.test(search)) {
+      const { data: matchingPurchases, error: purchaseSearchError } = await (supabase as any)
+        .from('purchases')
+        .select('client_id')
+        .ilike('transaction_code', `%${search}%`)
+        .limit(100);
+      if (purchaseSearchError) {
+        return NextResponse.json({ error: purchaseSearchError.message }, { status: 500 });
+      }
+      purchaseClientIds = [...new Set((matchingPurchases || []).map((purchase: any) => purchase.client_id).filter(Boolean))] as string[];
+    }
 
     const slaSettingQuery = (supabase as any)
       .from('crm_settings')
@@ -30,7 +42,10 @@ export async function GET(request: NextRequest) {
       .from('clients')
       .select('*, purchases(*)', { count: 'exact' });
     if (status && status !== 'todos' && status !== 'overdue') clientsQuery = clientsQuery.eq('status_journey', status);
-    if (search) clientsQuery = clientsQuery.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+    if (search) {
+      const transactionFilter = purchaseClientIds.length ? `,id.in.(${purchaseClientIds.join(',')})` : '';
+      clientsQuery = clientsQuery.or(`name.ilike.%${search}%,email.ilike.%${search}%${transactionFilter}`);
+    }
 
     const clientsQueryResult = clientsQuery
       .order('created_at', { ascending: false })
@@ -137,7 +152,11 @@ export async function GET(request: NextRequest) {
         new Date(),
         slaConfig,
       );
-      const purchase = Array.isArray(client.purchases) && client.purchases.length > 0 ? client.purchases[0] : null;
+      const purchases = Array.isArray(client.purchases)
+        ? [...client.purchases].sort((left: any, right: any) =>
+          (right.purchase_date || right.created_at || '').localeCompare(left.purchase_date || left.created_at || ''))
+        : [];
+      const purchase = purchases[0] || null;
       const latestConsultation = latestConsultationByClient.get(client.id);
 
       const fullRecord = {
@@ -149,6 +168,14 @@ export async function GET(request: NextRequest) {
           ? (attendantById.get(client.assigned_consultant_id)?.name || attendantById.get(client.assigned_consultant_id)?.email || 'Atendente')
           : null,
         phone: formatPhoneWithDDI(client.phone),
+        purchases: purchases.map((item: any) => ({
+          id: item.id,
+          transaction_code: item.transaction_code,
+          product_name: item.product_name,
+          status_hotmart: item.status_hotmart,
+          price_gross: item.price_gross === null ? null : Number(item.price_gross),
+          purchase_date: item.purchase_date,
+        })),
         product_name: purchase?.product_name || '7 Vídeo Aulas + E-book + Diário de Bordo + Diagnóstico',
         price_gross: purchase?.price_gross ? Number(purchase.price_gross) : 197.00,
         price_net: purchase?.price_net ? Number(purchase.price_net) : 169.20,

@@ -15,6 +15,14 @@ export interface MockClient {
   number?: string;
   complement?: string;
   product: string;
+  purchases: Array<{
+    id: string;
+    transaction_code: string;
+    product_name: string;
+    status_hotmart: string;
+    price_gross: number | null;
+    purchase_date: string;
+  }>;
   status_journey: JourneyState;
   sla_hours_left: number;
   is_overdue: boolean;
