@@ -127,32 +127,4 @@ export class HotmartApi {
     const page = await this.get<T>(path, { transaction, max_results: '1' });
     return page.items?.[0] || null;
   }
-
-  async probeHistoryFilters(startDate: Date, endDate: Date): Promise<Record<string, string>> {
-    const recentEnd = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const recentStart = new Date(recentEnd.getTime() - 24 * 60 * 60 * 1000);
-    const base = { transaction_status: 'APPROVED', max_results: '100' };
-    const cases: Record<string, Record<string, string>> = {
-      bare_history: {},
-      no_filters: { max_results: '100' },
-      known_transaction: { transaction: 'HP1517625102' },
-      status_only: base,
-      start_only: { ...base, start_date: String(startDate.getTime()) },
-      end_only: { ...base, end_date: String(endDate.getTime()) },
-      old_one_day: { ...base, start_date: String(startDate.getTime()), end_date: String(startDate.getTime() + 24 * 60 * 60 * 1000) },
-      recent_one_day: { ...base, start_date: String(recentStart.getTime()), end_date: String(recentEnd.getTime()) },
-      old_one_day_seconds: { ...base, start_date: String(Math.floor(startDate.getTime() / 1000)), end_date: String(Math.floor(startDate.getTime() / 1000) + 86400) },
-      date_without_status: { max_results: '100', start_date: String(startDate.getTime()), end_date: String(endDate.getTime()) },
-    };
-    const results: Record<string, string> = {};
-    for (const [name, params] of Object.entries(cases)) {
-      try {
-        await this.get<HotmartSale>('history', params);
-        results[name] = 'ok';
-      } catch (error) {
-        results[name] = error instanceof Error ? error.message : 'unknown_error';
-      }
-    }
-    return results;
-  }
 }

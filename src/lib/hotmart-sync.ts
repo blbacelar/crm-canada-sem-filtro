@@ -198,10 +198,7 @@ export async function syncHotmartSales(options: { dryRun?: boolean } = {}): Prom
           await processSale(sale);
         }
       } catch (error) {
-        const diagnostic = status === 'APPROVED' && error instanceof Error && error.message.includes('Hotmart history retornou HTTP 400')
-          ? await api.probeHistoryFilters(startDate, endDate)
-          : null;
-        throw new Error(`Consulta Hotmart ${status} ${startDate.toISOString()}–${endDate.toISOString()}: ${error instanceof Error ? error.message : 'Erro desconhecido'}${diagnostic ? `; filtros=${JSON.stringify(diagnostic)}` : ''}`);
+        throw new Error(`Consulta Hotmart ${status} ${startDate.toISOString()}–${endDate.toISOString()}: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
       }
     }
     summary.windowsScanned += 1;
