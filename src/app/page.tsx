@@ -139,6 +139,19 @@ const purchaseStatusLabels: Record<string, string> = {
   PURCHASE_REFUNDED: 'Estornado',
   PURCHASE_CANCELED: 'Cancelado',
   PURCHASE_CHARGEBACK: 'Contestado',
+  PURCHASE_CANCELLED: 'Cancelado',
+  PURCHASE_EXPIRED: 'Expirado',
+  PURCHASE_WAITING_PAYMENT: 'Pagamento pendente',
+  PURCHASE_STARTED: 'Compra iniciada',
+  PURCHASE_PRINTED_BILLET: 'Boleto gerado',
+  PURCHASE_PARTIALLY_REFUNDED: 'Parcialmente estornado',
+  PURCHASE_OVERDUE: 'Vencido',
+  PURCHASE_NO_FUNDS: 'Sem saldo',
+  PURCHASE_PROCESSING_TRANSACTION: 'Processando pagamento',
+  PURCHASE_UNDER_ANALISYS: 'Em análise',
+  PURCHASE_BLOCKED: 'Bloqueado',
+  PURCHASE_PROTESTED: 'Protestado',
+  PURCHASE_PRE_ORDER: 'Pré-venda',
 };
 
 function translateDiagnosticStatus(status: unknown) {
@@ -294,8 +307,8 @@ export default function HomePage() {
           assigned_consultant: c.assigned_consultant_name || (c.assigned_consultant_id ? 'Atendente Designado' : 'Pendente'),
           purchase_date: c.purchase_date || c.created_at || new Date().toISOString(),
           access_expires_at: c.access_expires_at || null,
-          price_gross: typeof c.price_gross === 'number' ? c.price_gross : 197.0,
-          price_net: typeof c.price_net === 'number' ? c.price_net : 169.20,
+          price_gross: typeof c.price_gross === 'number' ? c.price_gross : null,
+          price_net: typeof c.price_net === 'number' ? c.price_net : null,
           diagnostic_status: c.diagnostic_status || (c.status_journey === 'compra' ? 'pendente' : 'enviado'),
           days_since_purchase: c.created_at ? Math.floor((Date.now() - new Date(c.created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0,
           consultation_booked: Boolean(c.consultation_booked),
@@ -711,7 +724,7 @@ export default function HomePage() {
                         <div>
                           <span className="text-slate-400">Valor Líquido:</span>
                           <p className="font-semibold text-slate-900 dark:text-slate-100">
-                            R$ {selectedClient.price_net.toFixed(2)}
+                            {selectedClient.price_net === null ? 'Não informado' : `R$ ${selectedClient.price_net.toFixed(2)}`}
                           </p>
                         </div>
                         <div>
@@ -767,6 +780,7 @@ export default function HomePage() {
                               <TableHead>Compra</TableHead>
                               <TableHead>Status</TableHead>
                               <TableHead>Valor</TableHead>
+                              <TableHead>Pagamento</TableHead>
                               <TableHead>Transação</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -778,7 +792,15 @@ export default function HomePage() {
                                   <div className="text-slate-500">{new Date(purchase.purchase_date).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</div>
                                 </TableCell>
                                 <TableCell>{purchaseStatusLabels[purchase.status_hotmart] || purchase.status_hotmart.replaceAll('_', ' ')}</TableCell>
-                                <TableCell>{purchase.price_gross === null ? '—' : `R$ ${purchase.price_gross.toFixed(2)}`}</TableCell>
+                                <TableCell>
+                                  {purchase.price_gross === null ? '—' : `${purchase.currency_code === 'BRL' || !purchase.currency_code ? 'R$' : purchase.currency_code} ${purchase.price_gross.toFixed(2)}`}
+                                </TableCell>
+                                <TableCell>
+                                  {purchase.payment_method?.replaceAll('_', ' ') || '—'}
+                                  {purchase.installments && purchase.installments > 1 ? ` · ${purchase.installments}x` : ''}
+                                  {purchase.offer_code && <div className="text-[11px] text-slate-500">Oferta: {purchase.offer_code}</div>}
+                                  {purchase.is_subscription && <div className="text-[11px] text-slate-500">Assinatura</div>}
+                                </TableCell>
                                 <TableCell className="font-mono text-[11px]">{purchase.transaction_code}</TableCell>
                               </TableRow>
                             ))}

@@ -51,6 +51,8 @@ export default function AnalyticsPage() {
     totalPurchases: 0,
     totalGrossRevenue: 0,
     totalNetRevenue: 0,
+    unknownNetPurchases: 0,
+    foreignCurrencyPurchases: 0,
     slaComplianceRate: 0,
     conversionRate: 0,
   };
@@ -155,7 +157,7 @@ export default function AnalyticsPage() {
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Faturamento Bruto
+                  Faturamento Bruto (BRL)
                 </span>
                 <div className="p-2 rounded-lg bg-purple-500/10 text-purple-500">
                   <DollarSign className="w-5 h-5" />
@@ -165,7 +167,9 @@ export default function AnalyticsPage() {
                 {loading ? '...' : `R$ ${summary.totalGrossRevenue.toFixed(2)}`}
               </div>
               <p className="text-xs text-purple-600 dark:text-purple-400 mt-1 font-medium">
-                Líquido: R$ {summary.totalNetRevenue.toFixed(2)}
+                Líquido conhecido: R$ {summary.totalNetRevenue.toFixed(2)}
+                {summary.unknownNetPurchases > 0 && ` · ${summary.unknownNetPurchases} compra(s) sem líquido`}
+                {summary.foreignCurrencyPurchases > 0 && ` · ${summary.foreignCurrencyPurchases} em outra moeda`}
               </p>
             </CardContent>
           </Card>

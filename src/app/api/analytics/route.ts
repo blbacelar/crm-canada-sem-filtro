@@ -79,8 +79,13 @@ export async function GET(request: NextRequest) {
       : 100;
 
     // Métricas Financeiras
-    const totalGrossRevenue = allPurchases.reduce((acc: number, p: any) => acc + (Number(p.price_gross) || 0), 0);
-    const totalNetRevenue = allPurchases.reduce((acc: number, p: any) => acc + (Number(p.price_net) || 0), 0);
+    const paidStatuses = new Set(['APPROVED', 'COMPLETE', 'PURCHASE_APPROVED', 'PURCHASE_COMPLETE', 'PURCHASE_COMPLETED']);
+    const paidPurchases = allPurchases.filter((purchase: any) => paidStatuses.has(purchase.status_hotmart));
+    const brlPurchases = paidPurchases.filter((purchase: any) => !purchase.currency_code || purchase.currency_code === 'BRL');
+    const totalGrossRevenue = brlPurchases.reduce((acc: number, purchase: any) => acc + (Number(purchase.price_gross) || 0), 0);
+    const totalNetRevenue = brlPurchases.reduce((acc: number, purchase: any) => acc + (Number(purchase.price_net) || 0), 0);
+    const unknownNetPurchases = brlPurchases.filter((purchase: any) => purchase.price_net === null).length;
+    const foreignCurrencyPurchases = paidPurchases.length - brlPurchases.length;
 
     // Taxa de Conversão da Consulta (Marcada ou Concluída)
     const convertedCount = funnelCounts.consulta_marcada + funnelCounts.consulta_concluida;
@@ -95,6 +100,8 @@ export async function GET(request: NextRequest) {
         totalPurchases: allPurchases.length,
         totalGrossRevenue,
         totalNetRevenue,
+        unknownNetPurchases,
+        foreignCurrencyPurchases,
         slaComplianceRate,
         conversionRate,
       },

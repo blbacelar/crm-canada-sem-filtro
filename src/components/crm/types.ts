@@ -22,6 +22,13 @@ export interface MockClient {
     status_hotmart: string;
     price_gross: number | null;
     purchase_date: string;
+    payment_method?: string | null;
+    installments?: number | null;
+    currency_code?: string | null;
+    offer_code?: string | null;
+    is_subscription?: boolean | null;
+    hotmart_fee?: number | null;
+    hotmart_synced_at?: string | null;
   }>;
   status_journey: JourneyState;
   sla_hours_left: number;
@@ -30,8 +37,8 @@ export interface MockClient {
   assigned_consultant_id?: string | null;
   purchase_date: string;
   access_expires_at?: string | null;
-  price_gross: number;
-  price_net: number;
+  price_gross: number | null;
+  price_net: number | null;
   diagnostic_status: 'pendente' | 'enviado' | 'analisado';
   days_since_purchase: number;
   consultation_booked: boolean;

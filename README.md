@@ -191,6 +191,36 @@ O produto `8575181` concede acesso por um ano civil a partir da aprovação do
 pagamento. O vencimento aparece na ficha do cliente e é aplicado pelo banco às
 consultas do Diário de Bordo, inclusive em sessões já abertas.
 
+### Conciliação da API de vendas
+
+O webhook mantém a compra atualizada em tempo real. Uma rotina diária da Vercel
+consulta a API de vendas às 06:00 UTC para recuperar eventos perdidos e corrigir
+status, dados de pagamento e oferta. Ela consulta todos os status explicitamente,
+varre os últimos 90 dias e retrocede por janelas históricas de 29 dias. O avanço
+do retrocesso fica salvo em `hotmart_sync_state`, permitindo retomar após falhas.
+Compras mais antigas já conhecidas pelo CRM também são revalidadas periodicamente.
+
+Configure como **Secret** em Production na Vercel:
+
+```text
+HOTMART_CLIENT_ID
+HOTMART_CLIENT_SECRET
+HOTMART_BASIC_TOKEN
+CRON_SECRET
+```
+
+`CRON_SECRET` protege `GET /api/cron/hotmart-sync`; a Vercel o envia
+automaticamente no cabeçalho `Authorization` da rotina agendada. As respostas
+completas de histórico, participantes, comissões e preços ficam na tabela
+`hotmart_sale_snapshots`, acessível apenas ao serviço; o CRM expõe somente os
+campos necessários na ficha do cliente.
+
+Para conferir uma execução manual em ambiente local com as credenciais presentes
+em `.env.local`, use `npm run sync:hotmart -- --dry-run`. Remova `--dry-run` para
+gravar a conciliação. Segredos marcados como **Secret** na Vercel não são
+recuperáveis pelo `vercel env pull`; configure-os localmente apenas quando
+precisar desse comando.
+
 ---
 
 ## 📄 Licença
