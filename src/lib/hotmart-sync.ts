@@ -198,7 +198,16 @@ export async function syncHotmartSales(options: { dryRun?: boolean } = {}): Prom
           await processSale(sale);
         }
       } catch (error) {
-        throw new Error(`Consulta Hotmart ${status} ${startDate.toISOString()}–${endDate.toISOString()}: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+        let bareHistory = '';
+        if (status === 'APPROVED' && error instanceof Error && error.message.includes('Hotmart history retornou HTTP 400')) {
+          try {
+            await api.checkHistoryAccess();
+            bareHistory = '; consulta sem filtros: HTTP 200';
+          } catch (probeError) {
+            bareHistory = `; consulta sem filtros: ${probeError instanceof Error ? probeError.message : 'erro desconhecido'}`;
+          }
+        }
+        throw new Error(`Consulta Hotmart ${status} ${startDate.toISOString()}–${endDate.toISOString()}: ${error instanceof Error ? error.message : 'Erro desconhecido'}${bareHistory}`);
       }
     }
     summary.windowsScanned += 1;

@@ -123,6 +123,10 @@ export class HotmartApi {
     return page.items?.[0] || null;
   }
 
+  async checkHistoryAccess(): Promise<void> {
+    await this.get<HotmartSale>('history', {});
+  }
+
   async saleDetail<T>(path: 'users' | 'commissions' | 'price/details', transaction: string): Promise<T | null> {
     const page = await this.get<T>(path, { transaction, max_results: '1' });
     return page.items?.[0] || null;
