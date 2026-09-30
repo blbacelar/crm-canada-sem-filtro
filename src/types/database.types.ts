@@ -10,6 +10,8 @@ export type UserRole = 'admin' | 'consultant' | 'marketing' | 'tech';
 
 export type JourneyState =
   | 'compra'
+  | 'carrinho_abandonado'
+  | 'pagamento_pendente'
   | 'diagnostico_enviado'
   | 'acompanhamento'
   | 'consulta_marcada'
@@ -277,23 +279,28 @@ export interface Database {
           id: string;
           event_type: string;
           transaction_code: string | null;
+          external_event_id: string | null;
           payload: Json;
           status_processing: 'pending' | 'processed' | 'error' | 'ignored_duplicate';
           error_message: string | null;
+          reconciled_at: string | null;
           received_at: string;
         };
         Insert: {
           id?: string;
           event_type: string;
           transaction_code?: string | null;
+          external_event_id?: string | null;
           payload: Json;
           status_processing?: 'pending' | 'processed' | 'error' | 'ignored_duplicate';
           error_message?: string | null;
           received_at?: string;
+          reconciled_at?: string | null;
         };
         Update: {
           status_processing?: 'pending' | 'processed' | 'error' | 'ignored_duplicate';
           error_message?: string | null;
+          reconciled_at?: string | null;
         };
       };
       hotmart_sale_snapshots: {

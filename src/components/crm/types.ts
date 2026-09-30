@@ -29,6 +29,13 @@ export interface MockClient {
     is_subscription?: boolean | null;
     hotmart_fee?: number | null;
     hotmart_synced_at?: string | null;
+    included_products?: Array<{ product_id: number; product_name: string }>;
+  }>;
+  cart_abandonments: Array<{
+    event_id: string;
+    product_name: string;
+    offer_code: string | null;
+    occurred_at: string;
   }>;
   status_journey: JourneyState;
   sla_hours_left: number;
@@ -52,6 +59,8 @@ export interface MockClient {
 
 export const JOURNEY_LABELS: Record<JourneyState, { label: string; bg: string; text: string }> = {
   compra: { label: 'Compra Efetuada', bg: 'bg-blue-500/15', text: 'text-blue-600 dark:text-blue-400' },
+  carrinho_abandonado: { label: 'Carrinho abandonado', bg: 'bg-orange-500/15', text: 'text-orange-600 dark:text-orange-400' },
+  pagamento_pendente: { label: 'Pagamento pendente', bg: 'bg-yellow-500/15', text: 'text-yellow-700 dark:text-yellow-400' },
   diagnostico_enviado: { label: 'Diagnóstico Enviado', bg: 'bg-purple-500/15', text: 'text-purple-600 dark:text-purple-400' },
   acompanhamento: { label: 'Acompanhamento', bg: 'bg-amber-500/15', text: 'text-amber-600 dark:text-amber-400' },
   consulta_marcada: { label: 'Consulta Marcada', bg: 'bg-cyan-500/15', text: 'text-cyan-600 dark:text-cyan-400' },

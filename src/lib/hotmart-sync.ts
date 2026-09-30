@@ -95,15 +95,29 @@ export async function syncHotmartSales(options: { dryRun?: boolean } = {}): Prom
       seenTransactions.add(transaction);
       summary.seen += 1;
 
-      const { data: snapshot, error: snapshotError } = await db
-        .from('hotmart_sale_snapshots')
-        .select('history, synced_at')
-        .eq('transaction_code', transaction)
-        .maybeSingle();
-      if (snapshotError) throw snapshotError;
+      const [{ data: snapshot, error: snapshotError }, { data: recorded, error: purchaseError }] = await Promise.all([
+        db.from('hotmart_sale_snapshots')
+          .select('history, commissions, synced_at')
+          .eq('transaction_code', transaction)
+          .maybeSingle(),
+        db.from('purchases')
+          .select('status_hotmart, product_id, product_name, price_gross, price_net, clients(email)')
+          .eq('transaction_code', transaction)
+          .maybeSingle(),
+      ]);
+      if (snapshotError || purchaseError) throw snapshotError || purchaseError;
       const snapshotAge = snapshot?.synced_at ? Date.now() - Date.parse(snapshot.synced_at) : Infinity;
+      const expectedGross = Number(sale.purchase?.price?.value);
+      const expectedNet = producerNet(snapshot?.commissions, sale.purchase?.price?.currency_code || sale.purchase?.price?.currency_value);
+      const purchaseMatches = recorded
+        && recorded.status_hotmart === eventForStatus(status)
+        && Number(recorded.product_id) === Number(sale.product?.id)
+        && recorded.product_name === (sale.product?.name || 'Produto Hotmart')
+        && (recorded.price_gross === null ? null : Number(recorded.price_gross)) === (Number.isFinite(expectedGross) ? expectedGross : null)
+        && (recorded.price_net === null ? null : Number(recorded.price_net)) === expectedNet
+        && recorded.clients?.email === email;
       if (snapshot && stableStringify(snapshot.history) === stableStringify(sale)
-        && snapshotAge < 7 * 24 * 60 * 60 * 1000) {
+        && snapshotAge < 7 * 24 * 60 * 60 * 1000 && purchaseMatches) {
         summary.unchanged += 1;
         return;
       }
@@ -132,7 +146,8 @@ export async function syncHotmartSales(options: { dryRun?: boolean } = {}): Prom
         source: 'hotmart',
         status_journey: ['REFUNDED', 'CHARGEBACK', 'PARTIALLY_REFUNDED'].includes(status)
           ? 'reembolso'
-          : ['CANCELLED', 'EXPIRED'].includes(status) ? 'cancelamento' : 'compra',
+          : ['CANCELLED', 'EXPIRED'].includes(status) ? 'cancelamento'
+            : ['APPROVED', 'COMPLETE'].includes(status) ? 'compra' : 'pagamento_pendente',
       }));
       const { data: existing, error: existingError } = await db
         .from('clients')
@@ -147,7 +162,8 @@ export async function syncHotmartSales(options: { dryRun?: boolean } = {}): Prom
           ...candidate,
           name: existing.name || candidate.name,
           source: existing.source || candidate.source,
-          status_journey: existing.status_journey || candidate.status_journey,
+          status_journey: ['carrinho_abandonado', 'pagamento_pendente'].includes(existing.status_journey)
+            ? candidate.status_journey : (existing.status_journey || candidate.status_journey),
           phone: existing.phone || candidate.phone,
           document: existing.document || candidate.document,
           country: existing.country || candidate.country,

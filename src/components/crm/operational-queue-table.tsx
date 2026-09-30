@@ -91,7 +91,9 @@ export function OperationalQueueTable({
                 </TableCell>
                 <TableCell className="text-slate-600 dark:text-slate-300">{client.product}</TableCell>
                 <TableCell>
-                  {client.status_journey !== 'compra' ? (
+                  {['carrinho_abandonado', 'pagamento_pendente'].includes(client.status_journey) ? (
+                    <span className="text-slate-500 text-xs">Não se aplica</span>
+                  ) : client.status_journey !== 'compra' ? (
                     <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-xs inline-flex items-center gap-1">
                       <CheckCircle2 className="w-3.5 h-3.5" /> Cumprido
                     </span>

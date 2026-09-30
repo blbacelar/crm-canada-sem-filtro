@@ -16,7 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 
 interface HeaderProps {
   currentRole?: UserRole;
@@ -163,11 +162,11 @@ export function Header({
             </Button>
           )}
 
-          {/* Webhook Status Indicator Badge */}
-          <Badge variant="outline" className="bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400 gap-1.5 py-1">
-            <Activity className="w-3 h-3 animate-pulse" />
-            <span className="hidden sm:inline">Hotmart OK</span>
-          </Badge>
+          {activeRole !== 'marketing' && (
+            <Button asChild variant="outline" size="sm" className="gap-1.5 text-xs">
+              <Link href="/hotmart"><Activity className="h-3.5 w-3.5" /> Hotmart</Link>
+            </Button>
+          )}
 
           {/* User Profile & Active Role Badge / Logout Button */}
           <div className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-800">
