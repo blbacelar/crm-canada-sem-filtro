@@ -51,6 +51,8 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { createClient as createSupabaseClient } from '@/lib/supabase/client';
 import { MockClient } from '@/components/crm/types';
+import { clientMatchesFilters, loadClientsForExport, mapApiClient } from '@/components/crm/client-list';
+import { leadsToCsv } from '@/components/crm/leads-csv';
 import { OperationalSummary } from '@/components/crm/operational-summary';
 import { OperationalQueueTable } from '@/components/crm/operational-queue-table';
 import { ConsultationControl } from '@/components/crm/consultation-control';
@@ -198,6 +200,8 @@ export default function HomePage() {
   const [showDuplicateModal, setShowDuplicateModal] = React.useState<boolean>(false);
   const [loading, setLoading] = React.useState<boolean>(false);
   const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [exporting, setExporting] = React.useState(false);
+  const [exportError, setExportError] = React.useState<string | null>(null);
   const [currentPage, setCurrentPage] = React.useState<number>(1);
   const [pageSize, setPageSize] = React.useState<number>(10);
   const [totalClientCount, setTotalClientCount] = React.useState<number>(0);
@@ -284,42 +288,7 @@ export default function HomePage() {
           diagnostics: rawList.filter((client: any) => client.status_journey === 'diagnostico_enviado').length,
           overdue: rawList.filter((client: any) => client.is_overdue).length,
         });
-      const apiClients: MockClient[] = rawList.map((c: any) => ({
-          id: c.id,
-          name: c.name || 'Cliente Sem Nome',
-          email: c.email || '',
-          phone: c.phone || 'Não informado',
-          document: c.document,
-          country: c.country,
-          zip_code: c.zip_code,
-          city: c.city,
-          state: c.state,
-          address: c.address,
-          district: c.district,
-          number: c.number,
-          complement: c.complement,
-          product: c.product_name || '7 Vídeo Aulas + E-book + Diário de Bordo + Diagnóstico',
-          purchases: Array.isArray(c.purchases) ? c.purchases : [],
-          cart_abandonments: Array.isArray(c.cart_abandonments) ? c.cart_abandonments : [],
-          status_journey: (c.status_journey || c.effective_status_journey || 'compra') as JourneyState,
-          sla_hours_left: typeof c.sla_hours_left === 'number' ? c.sla_hours_left : 24,
-          is_overdue: !!c.is_overdue,
-          assigned_consultant_id: c.assigned_consultant_id || null,
-          assigned_consultant: c.assigned_consultant_name || (c.assigned_consultant_id ? 'Atendente Designado' : 'Pendente'),
-          purchase_date: c.purchase_date || c.created_at || new Date().toISOString(),
-          access_expires_at: c.access_expires_at || null,
-          price_gross: typeof c.price_gross === 'number' ? c.price_gross : null,
-          price_net: typeof c.price_net === 'number' ? c.price_net : null,
-          diagnostic_status: c.diagnostic_status || (c.status_journey === 'compra' ? 'pendente' : 'enviado'),
-          days_since_purchase: c.created_at ? Math.floor((Date.now() - new Date(c.created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0,
-          consultation_booked: Boolean(c.consultation_booked),
-          consultation_status: c.consultation_status || null,
-          consultation_date: c.consultation_date || null,
-          consultation_value: typeof c.consultation_value === 'number' ? c.consultation_value : null,
-          consultation_commission_percentage: typeof c.consultation_commission_percentage === 'number' ? c.consultation_commission_percentage : null,
-          consultation_company_return_amount: typeof c.consultation_company_return_amount === 'number' ? c.consultation_company_return_amount : null,
-          consultation_consultant_name: c.consultation_consultant_name || null,
-      }));
+      const apiClients: MockClient[] = rawList.map(mapApiClient);
       setClients(apiClients);
       // Atualizar o cliente atualmente aberto no drawer com os dados mais recentes do Supabase
       setSelectedClient((prev) => {
@@ -423,26 +392,34 @@ export default function HomePage() {
     setCurrentPage(1);
   }, [statusFilter, searchQuery, pageSize]);
 
-  const filteredClients = clients.filter((client) => {
-    if (!client) return false;
-    const name = client.name || '';
-    const email = client.email || '';
-    const product = client.product || '';
-    const matchesTransaction = client.purchases.some((purchase) =>
-      purchase.transaction_code.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesSearch =
-      name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      matchesTransaction;
-
-    if (statusFilter === 'overdue') return matchesSearch && client.is_overdue;
-    if (statusFilter !== 'todos') return matchesSearch && client.status_journey === statusFilter;
-    return matchesSearch;
-  });
+  const filteredClients = clients.filter((client) =>
+    clientMatchesFilters(client, statusFilter, searchQuery));
 
   const totalPages = Math.ceil(totalClientCount / pageSize) || 1;
   const paginatedClients = filteredClients;
+
+  const handleExportCsv = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setExportError(null);
+
+    try {
+      const exportedClients = await loadClientsForExport(statusFilter, searchQuery);
+      const csv = leadsToCsv(exportedClients);
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `leads-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (cause) {
+      setExportError(cause instanceof Error ? cause.message : 'Não foi possível exportar os leads.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleStateChange = async (clientId: string, newState: JourneyState) => {
     const response = await fetch('/api/clients', {
@@ -610,7 +587,10 @@ export default function HomePage() {
 
         <OperationalQueueTable
           clients={paginatedClients}
+          exporting={exporting}
+          exportError={exportError}
           loading={loading}
+          onExportCsv={handleExportCsv}
           totalClientCount={totalClientCount}
           currentPage={currentPage}
           pageSize={pageSize}
