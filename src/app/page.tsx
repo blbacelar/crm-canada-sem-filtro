@@ -300,6 +300,7 @@ export default function HomePage() {
           complement: c.complement,
           product: c.product_name || '7 Vídeo Aulas + E-book + Diário de Bordo + Diagnóstico',
           purchases: Array.isArray(c.purchases) ? c.purchases : [],
+          cart_abandonments: Array.isArray(c.cart_abandonments) ? c.cart_abandonments : [],
           status_journey: (c.status_journey || c.effective_status_journey || 'compra') as JourneyState,
           sla_hours_left: typeof c.sla_hours_left === 'number' ? c.sla_hours_left : 24,
           is_overdue: !!c.is_overdue,
@@ -688,6 +689,8 @@ export default function HomePage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="compra">Compra Efetuada</SelectItem>
+                    <SelectItem value="carrinho_abandonado">Carrinho abandonado</SelectItem>
+                    <SelectItem value="pagamento_pendente">Pagamento pendente</SelectItem>
                     <SelectItem value="diagnostico_enviado">Diagnóstico Enviado</SelectItem>
                     <SelectItem value="acompanhamento">Acompanhamento</SelectItem>
                     <SelectItem value="consulta_marcada">Consulta Marcada</SelectItem>
@@ -789,6 +792,9 @@ export default function HomePage() {
                               <TableRow key={purchase.id} className="cursor-default">
                                 <TableCell>
                                   <div className="font-semibold">{purchase.product_name}</div>
+                                  {purchase.included_products?.length ? (
+                                    <div className="text-[11px] text-slate-500">Inclui: {purchase.included_products.map((product) => product.product_name).join(', ')}</div>
+                                  ) : null}
                                   <div className="text-slate-500">{new Date(purchase.purchase_date).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</div>
                                 </TableCell>
                                 <TableCell>{purchaseStatusLabels[purchase.status_hotmart] || purchase.status_hotmart.replaceAll('_', ' ')}</TableCell>
@@ -809,6 +815,26 @@ export default function HomePage() {
                       ) : (
                         <p className="p-4 text-xs text-slate-500">Nenhuma compra registrada para este cliente.</p>
                       )}
+                    </Card>
+
+                    <Card className="overflow-hidden border-slate-200 dark:border-slate-800">
+                      <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Carrinhos abandonados</h3>
+                      </div>
+                      {selectedClient.cart_abandonments.length ? (
+                        <Table>
+                          <TableHeader><TableRow><TableHead>Produto</TableHead><TableHead>Data</TableHead><TableHead>Oferta</TableHead></TableRow></TableHeader>
+                          <TableBody>
+                            {selectedClient.cart_abandonments.map((cart) => (
+                              <TableRow key={cart.event_id}>
+                                <TableCell className="font-semibold">{cart.product_name}</TableCell>
+                                <TableCell>{new Date(cart.occurred_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</TableCell>
+                                <TableCell className="font-mono text-[11px]">{cart.offer_code || '—'}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      ) : <p className="p-4 text-xs text-slate-500">Nenhum abandono de carrinho recebido da Hotmart.</p>}
                     </Card>
 
                     {/* Card de Endereço e Cadastro Completo (Hotmart Buyer Data) */}

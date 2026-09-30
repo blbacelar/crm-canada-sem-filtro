@@ -67,6 +67,39 @@ export async function GET(request: NextRequest) {
     // efetivo a partir do envio mais recente para não mostrar "não enviado"
     // quando há uma submissão real.
     const clientIds = ((clients || []) as any[]).map((client) => client.id).filter(Boolean);
+    const privateDb = createAdminClient() as any;
+    const visiblePurchases = ((clients || []) as any[]).flatMap((client) => client.purchases || []);
+    const transactions = [...new Set(visiblePurchases.map((purchase: any) => purchase.transaction_code).filter(Boolean))] as string[];
+    const canSeeHistory = role !== 'marketing';
+    const [cartResult, productsResult] = await Promise.all([
+      canSeeHistory && clientIds.length
+        ? privateDb.from('hotmart_cart_abandonments')
+          .select('event_id, client_id, product_name, offer_code, occurred_at')
+          .in('client_id', clientIds)
+          .order('occurred_at', { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+      canSeeHistory && transactions.length
+        ? privateDb.from('hotmart_purchase_products')
+          .select('transaction_code, product_id, product_name')
+          .in('transaction_code', transactions)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (cartResult.error || productsResult.error) {
+      console.error('Falha ao carregar histórico Hotmart:', cartResult.error || productsResult.error);
+      return NextResponse.json({ error: 'Não foi possível carregar o histórico Hotmart.' }, { status: 500 });
+    }
+    const cartsByClient = new Map<string, any[]>();
+    for (const cart of cartResult.data || []) {
+      const entries = cartsByClient.get(cart.client_id) || [];
+      entries.push(cart);
+      cartsByClient.set(cart.client_id, entries);
+    }
+    const productsByTransaction = new Map<string, any[]>();
+    for (const product of productsResult.data || []) {
+      const entries = productsByTransaction.get(product.transaction_code) || [];
+      entries.push(product);
+      productsByTransaction.set(product.transaction_code, entries);
+    }
     const { data: diagnosticCases, error: diagnosticCasesError } = clientIds.length
       ? await (supabase as any)
         .from('diagnostic_cases')
@@ -157,6 +190,7 @@ export async function GET(request: NextRequest) {
           (right.purchase_date || right.created_at || '').localeCompare(left.purchase_date || left.created_at || ''))
         : [];
       const purchase = purchases[0] || null;
+      const cartAbandonments = cartsByClient.get(client.id) || [];
       const latestConsultation = latestConsultationByClient.get(client.id);
 
       const fullRecord = {
@@ -182,8 +216,18 @@ export async function GET(request: NextRequest) {
           is_subscription: item.is_subscription ?? null,
           hotmart_fee: item.hotmart_fee === null || item.hotmart_fee === undefined ? null : Number(item.hotmart_fee),
           hotmart_synced_at: item.hotmart_synced_at || null,
+          included_products: (productsByTransaction.get(item.transaction_code) || []).map((product: any) => ({
+            product_id: product.product_id,
+            product_name: product.product_name,
+          })),
         })),
-        product_name: purchase?.product_name || '7 Vídeo Aulas + E-book + Diário de Bordo + Diagnóstico',
+        cart_abandonments: cartAbandonments.map((cart: any) => ({
+          event_id: cart.event_id,
+          product_name: cart.product_name,
+          offer_code: cart.offer_code,
+          occurred_at: cart.occurred_at,
+        })),
+        product_name: purchase?.product_name || cartAbandonments[0]?.product_name || 'Produto não informado',
         price_gross: purchase?.price_gross === null || purchase?.price_gross === undefined ? null : Number(purchase.price_gross),
         price_net: purchase?.price_net === null || purchase?.price_net === undefined ? null : Number(purchase.price_net),
         purchase_date: purchase?.purchase_date || client.created_at,
@@ -301,7 +345,7 @@ export async function PATCH(request: NextRequest) {
       assigned_consultant_id?: string | null;
     };
     const validStates: JourneyState[] = [
-      'compra', 'diagnostico_enviado', 'acompanhamento', 'consulta_marcada',
+      'compra', 'carrinho_abandonado', 'pagamento_pendente', 'diagnostico_enviado', 'acompanhamento', 'consulta_marcada',
       'consulta_concluida', 'cancelamento', 'reembolso',
     ];
     if (!client_id || (status_journey && !validStates.includes(status_journey))) {

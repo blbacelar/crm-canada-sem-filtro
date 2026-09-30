@@ -10,11 +10,13 @@ export interface HotmartWebhookPayload {
     product?: {
       id?: number | string;
       name?: string;
+      content?: { products?: Array<{ id?: number | string; name?: string }> };
     };
     buyer?: {
       name?: string;
       email?: string;
       checkout_phone?: string;
+      phone?: string;
       document?: string;
       address?: {
         country?: string;
@@ -41,7 +43,19 @@ export interface HotmartWebhookPayload {
         value?: number;
       };
     };
+    offer?: { code?: string };
   };
+}
+
+export interface ParsedHotmartCartAbandonment {
+  eventId: string;
+  occurredAt: string;
+  buyerName: string;
+  buyerEmail: string;
+  buyerPhone: string | null;
+  productId: number | null;
+  productName: string;
+  offerCode: string | null;
 }
 
 export interface ParsedHotmartEvent {
@@ -63,8 +77,9 @@ export interface ParsedHotmartEvent {
   buyerNumber: string | null;
   buyerComplement: string | null;
   productName: string;
-  priceGross: number;
-  priceNet: number;
+  includedProducts: Array<{ productId: number; productName: string }>;
+  priceGross: number | null;
+  priceNet: number | null;
   purchaseDate: string;
   mappedJourneyState: JourneyState;
 }
@@ -90,11 +105,30 @@ function parseHotmartDate(value: number | string | undefined): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+export function parseHotmartCartAbandonment(payload: HotmartWebhookPayload): ParsedHotmartCartAbandonment | null {
+  if (payload?.event?.toUpperCase() !== 'PURCHASE_OUT_OF_SHOPPING_CART'
+    || !payload.id?.trim() || !payload.data?.buyer?.email?.trim()) return null;
+  const productId = Number(payload.data.product?.id);
+  return {
+    eventId: payload.id,
+    occurredAt: parseHotmartDate(payload.creation_date) || new Date().toISOString(),
+    buyerName: payload.data.buyer.name?.trim() || 'Lead Hotmart',
+    buyerEmail: payload.data.buyer.email.trim().toLowerCase(),
+    buyerPhone: payload.data.buyer.phone || payload.data.buyer.checkout_phone || null,
+    productId: Number.isSafeInteger(productId) && productId > 0 ? productId : null,
+    productName: payload.data.product?.name?.trim() || 'Produto Hotmart',
+    offerCode: payload.data.offer?.code?.trim() || null,
+  };
+}
+
 export function parseHotmartWebhook(payload: HotmartWebhookPayload): ParsedHotmartEvent | null {
   if (
     !payload
     || typeof payload.event !== 'string'
     || !payload.event.trim()
+    || (!payload.event.toUpperCase().startsWith('PURCHASE_')
+      && !['APPROVED', 'COMPLETE', 'CANCELED', 'CANCELLED', 'REFUNDED', 'CHARGEBACK'].includes(payload.event.toUpperCase()))
+    || payload.event.toUpperCase() === 'PURCHASE_OUT_OF_SHOPPING_CART'
     || !payload.data
     || !payload.data.purchase
     || !payload.data.purchase.transaction
@@ -133,17 +167,18 @@ export function parseHotmartWebhook(payload: HotmartWebhookPayload): ParsedHotma
   const buyerComplement = address.complement || null;
 
   const productName = product.name || 'Produto Canadá Sem Filtro';
-  const priceGross = purchase.price?.value || 0;
-  const priceNet = purchase.original_offer_price?.value || priceGross * 0.9;
+  const priceGross = typeof purchase.price?.value === 'number' ? purchase.price.value : null;
+  // The offer price is not the producer's net commission.
+  const priceNet = null;
   const purchaseDate = parseHotmartDate(purchase.order_date) || eventOccurredAt;
 
-  let mappedJourneyState: JourneyState = 'compra';
+  let mappedJourneyState: JourneyState = 'pagamento_pendente';
 
-  if (['PURCHASE_APPROVED', 'APPROVED', 'COMPLETE'].includes(eventType)) {
+  if (grantsDiagnosticAccess(eventType)) {
     mappedJourneyState = 'compra';
   } else if (['PURCHASE_CANCELED', 'CANCELED'].includes(eventType)) {
     mappedJourneyState = 'cancelamento';
-  } else if (['REFUNDED', 'REFUND', 'CHARGEBACK'].includes(eventType)) {
+  } else if (['PURCHASE_REFUNDED', 'PURCHASE_PARTIALLY_REFUNDED', 'PURCHASE_CHARGEBACK', 'REFUNDED', 'REFUND', 'CHARGEBACK'].includes(eventType)) {
     mappedJourneyState = 'reembolso';
   }
 
@@ -166,6 +201,12 @@ export function parseHotmartWebhook(payload: HotmartWebhookPayload): ParsedHotma
     buyerNumber,
     buyerComplement,
     productName,
+    includedProducts: (product.content?.products || []).flatMap((item) => {
+      const id = Number(item.id);
+      return Number.isSafeInteger(id) && id > 0 && item.name?.trim()
+        ? [{ productId: id, productName: item.name.trim() }]
+        : [];
+    }),
     priceGross,
     priceNet,
     purchaseDate,

@@ -40,7 +40,7 @@ export function OperationalSummary({
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
-          label="Total de Clientes"
+          label="Total de contatos"
           value={loading ? '...' : totalClientCount}
           description="Base real sincronizada do Supabase"
           icon={<Users className="w-5 h-5" />}
@@ -85,6 +85,12 @@ export function OperationalSummary({
           </Button>
           <Button variant={statusFilter === 'compra' ? 'default' : 'outline'} size="sm" onClick={() => onStatusFilterChange('compra')}>
             Novas Compras
+          </Button>
+          <Button variant={statusFilter === 'carrinho_abandonado' ? 'default' : 'outline'} size="sm" onClick={() => onStatusFilterChange('carrinho_abandonado')}>
+            Carrinhos abandonados
+          </Button>
+          <Button variant={statusFilter === 'pagamento_pendente' ? 'default' : 'outline'} size="sm" onClick={() => onStatusFilterChange('pagamento_pendente')}>
+            Pagamento pendente
           </Button>
           <Button variant={statusFilter === 'diagnostico_enviado' ? 'default' : 'outline'} size="sm" onClick={() => onStatusFilterChange('diagnostico_enviado')}>
             Diagnósticos
