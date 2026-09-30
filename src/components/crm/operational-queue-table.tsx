@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, ChevronLeft, ChevronRight, CheckCircle2, Filter } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight, CheckCircle2, Download, Filter } from 'lucide-react';
 import { MockClient, JOURNEY_LABELS } from '@/components/crm/types';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -9,6 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 interface OperationalQueueTableProps {
   clients: MockClient[];
+  exporting: boolean;
+  exportError: string | null;
   loading: boolean;
   totalClientCount: number;
   currentPage: number;
@@ -16,11 +18,14 @@ interface OperationalQueueTableProps {
   totalPages: number;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
+  onExportCsv: () => void;
   onSelectClient: (client: MockClient) => void;
 }
 
 export function OperationalQueueTable({
   clients,
+  exporting,
+  exportError,
   loading,
   totalClientCount,
   currentPage,
@@ -28,6 +33,7 @@ export function OperationalQueueTable({
   totalPages,
   onPageChange,
   onPageSizeChange,
+  onExportCsv,
   onSelectClient,
 }: OperationalQueueTableProps) {
   const startIndex = (currentPage - 1) * pageSize;
@@ -35,13 +41,19 @@ export function OperationalQueueTable({
 
   return (
     <Card className="overflow-hidden">
-      <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
           <Filter className="w-4 h-4 text-red-500" />
           <span>Fila Operacional de Atendimento</span>
         </h2>
-        <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">SLA padrão: 24h úteis</span>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">SLA padrão: 24h úteis</span>
+          <Button variant="outline" size="sm" disabled={loading || exporting} onClick={onExportCsv} className="gap-1">
+            <Download className="h-4 w-4" /> {exporting ? 'Exportando…' : 'Exportar CSV'}
+          </Button>
+        </div>
       </div>
+      {exportError && <p role="alert" className="border-b border-red-200 px-4 py-2 text-xs text-red-600 dark:border-red-900">{exportError}</p>}
 
       <Table>
         <TableHeader>
