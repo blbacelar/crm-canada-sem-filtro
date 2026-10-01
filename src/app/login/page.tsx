@@ -41,8 +41,66 @@ export default function LoginPage() {
   const [forgotPassword, setForgotPassword] = React.useState(false);
   const [resetEmail, setResetEmail] = React.useState('');
   const [resetSent, setResetSent] = React.useState(false);
+  const [recoveryState, setRecoveryState] = React.useState<'idle' | 'verifying' | 'ready' | 'invalid'>('idle');
+  const [newPassword, setNewPassword] = React.useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = React.useState('');
+  const recoveryStarted = React.useRef(false);
 
-  const supabase = createClient();
+  const supabase = React.useMemo(createClient, []);
+
+  React.useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('recovery') !== '1' || recoveryStarted.current) return;
+    recoveryStarted.current = true;
+
+    const recoveryParams = new URLSearchParams(window.location.hash.slice(1));
+    const tokenHash = recoveryParams.get('token_hash');
+    // The fragment contains a one-time credential; remove it from browser history.
+    window.history.replaceState(null, '', '/login?recovery=1');
+
+    if (!tokenHash || recoveryParams.get('type') !== 'recovery') {
+      setRecoveryState('invalid');
+      return;
+    }
+
+    setRecoveryState('verifying');
+    void supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' }).then(({ error: verifyError }) => {
+      setRecoveryState(verifyError ? 'invalid' : 'ready');
+    }).catch(() => setRecoveryState('invalid'));
+  }, [supabase]);
+
+  const handleNewPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (newPassword.length < 8) {
+      setError('A nova senha deve ter no mínimo 8 caracteres.');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setError('As senhas não coincidem.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+      if (updateError) {
+        setError(updateError.message || 'Não foi possível redefinir a senha.');
+        return;
+      }
+
+      await supabase.auth.signOut({ scope: 'local' });
+      window.history.replaceState(null, '', '/login');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setRecoveryState('idle');
+      setSuccess('Senha redefinida. Entre no CRM com a nova senha.');
+    } catch {
+      setError('Não foi possível redefinir a senha. Solicite um novo link e tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -179,6 +237,50 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (recoveryState !== 'idle') {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-slate-50 p-4 dark:bg-slate-950">
+        <Card className="w-full max-w-md border-slate-200 bg-white/95 p-4 shadow-2xl dark:border-slate-800 dark:bg-slate-900/95">
+          <CardHeader className="text-center">
+            <Image src="/logo.png" alt="Canadá Sem Filtro" width={200} height={56} className="mx-auto h-12 w-auto object-contain" priority />
+            <CardTitle className="text-xl">Redefinir senha do CRM</CardTitle>
+            <CardDescription>
+              {recoveryState === 'verifying' ? 'Validando seu link…' : recoveryState === 'invalid'
+                ? 'Este link expirou ou já foi usado.' : 'Escolha uma nova senha para sua conta.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {recoveryState === 'invalid' && (
+              <Button className="w-full" onClick={() => {
+                window.history.replaceState(null, '', '/login');
+                setRecoveryState('idle');
+                setForgotPassword(true);
+              }}>
+                Solicitar novo link
+              </Button>
+            )}
+            {recoveryState === 'ready' && (
+              <form onSubmit={handleNewPassword} className="space-y-4">
+                {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+                <div>
+                  <label htmlFor="new-password" className="mb-1 block text-sm font-medium">Nova senha</label>
+                  <Input id="new-password" type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                </div>
+                <div>
+                  <label htmlFor="confirm-new-password" className="mb-1 block text-sm font-medium">Confirmar nova senha</label>
+                  <Input id="confirm-new-password" type="password" autoComplete="new-password" minLength={8} required value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)} />
+                </div>
+                <Button type="submit" disabled={loading} className="w-full">
+                  {loading ? 'Salvando…' : 'Salvar nova senha'}
+                </Button>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // Tela de Acesso Pendente — usuário autenticado mas ainda não aprovado pelo Admin
   if (pendingApproval) {

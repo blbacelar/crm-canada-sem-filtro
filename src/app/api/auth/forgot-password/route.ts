@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { buildRecoveryLink } from '@/lib/password-recovery';
 import { Resend } from 'resend';
 
 export const dynamic = 'force-dynamic';
@@ -15,22 +16,25 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient();
 
-    // Gerar link de reset via Supabase Admin API
+    // The Supabase-hosted action link can fall back to a different app's Site URL
+    // when this CRM is missing from the project's redirect allow list.
     const { data, error: linkError } = await supabase.auth.admin.generateLink({
       type: 'recovery',
       email: email.trim(),
-      options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://crm-canada-sem-filtro.vercel.app'}/login`,
-      },
     });
 
-    if (linkError || !data?.properties?.action_link) {
+    if (linkError || !data?.properties?.hashed_token) {
       console.error('Erro ao gerar link de recuperação:', JSON.stringify(linkError));
       // Retornar sucesso mesmo se usuário não existir (segurança — não vazar se email está cadastrado)
       return NextResponse.json({ success: true });
     }
 
-    const resetLink = data.properties.action_link;
+    // Verify the one-time token in the CRM itself. A URL fragment keeps the
+    // token out of Vercel request logs and avoids Supabase redirect settings.
+    const resetLink = buildRecoveryLink(
+      data.properties.hashed_token,
+      process.env.NODE_ENV === 'production' ? undefined : request.nextUrl.origin,
+    );
 
     // from: usa env var RESEND_FROM_EMAIL — se não configurado usa onboarding@resend.dev (domínio verificado do Resend)
     const fromAddress = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
