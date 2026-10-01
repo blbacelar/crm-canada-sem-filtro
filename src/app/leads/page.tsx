@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { Download, MailCheck, RefreshCw, Search } from 'lucide-react';
-import { Header } from '@/components/header';
+import { LeadWorkspaceShell } from '@/components/crm/lead-workspace-shell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { fetchCurrentUser } from '@/lib/client-auth';
 import { audienceToCsv, filterAudience, type AudienceContact, type AudienceFilters } from '@/lib/lead-audience';
-import type { UserRole } from '@/types/database.types';
 
 const PAGE_SIZE = 20;
 
@@ -32,7 +31,6 @@ function purchaseLabel(contact: AudienceContact): string {
 }
 
 export default function LeadsPage() {
-  const [role, setRole] = React.useState<UserRole>('consultant');
   const [userEmail, setUserEmail] = React.useState('');
   const [contacts, setContacts] = React.useState<AudienceContact[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -64,7 +62,6 @@ export default function LeadsPage() {
         window.location.assign('/login');
         return;
       }
-      setRole(user.role as UserRole);
       setUserEmail(user.email || '');
       if (user.role === 'admin' || user.role === 'marketing') void load();
       else setLoading(false);
@@ -99,13 +96,12 @@ export default function LeadsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50">
-      <Header currentRole={role} userEmail={userEmail} searchQuery={filters.search} onSearchChange={(value) => updateFilter('search', value)} />
-      <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+    <LeadWorkspaceShell userEmail={userEmail}>
+      <div className="space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-600">CRM · Canadá Sem Filtro</p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight">Leads</h1>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7d929d]">Base de relacionamento</p>
+            <h1 className="mt-1 font-serif text-5xl font-normal tracking-tight text-[#1f2b32] sm:text-6xl">Leads</h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
               Uma pessoa por e-mail. Compras vêm das transações registradas na Hotmart; inscrição na masterclass não é tratada como compra.
             </p>
@@ -195,7 +191,7 @@ export default function LeadsPage() {
             <div className="flex gap-2"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>Anterior</Button><Button variant="outline" size="sm" disabled={page >= pages} onClick={() => setPage(page + 1)}>Próxima</Button></div>
           </div>
         </Card>
-      </main>
-    </div>
+      </div>
+    </LeadWorkspaceShell>
   );
 }
