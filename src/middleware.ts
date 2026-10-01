@@ -83,7 +83,8 @@ export async function middleware(request: NextRequest) {
     return deleteCookies(NextResponse.redirect(url), staleCookieNames);
   }
 
-  if (user && request.nextUrl.pathname.startsWith('/login')) {
+  if (user && request.nextUrl.pathname.startsWith('/login')
+    && request.nextUrl.searchParams.get('recovery') !== '1') {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     return deleteCookies(NextResponse.redirect(url), staleCookieNames);
