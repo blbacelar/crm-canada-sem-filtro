@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Search, User, LogOut, Activity, Sliders, BarChart3, X, Save } from 'lucide-react';
+import { Search, User, LogOut, Activity, Sliders, BarChart3, X, Save, UsersRound } from 'lucide-react';
 import { UserRole } from '@/types/database.types';
 import { createClient } from '@/lib/supabase/client';
 import { fetchCurrentUser } from '@/lib/client-auth';
@@ -147,6 +147,11 @@ export function Header({
 
         {/* Right Action Tools */}
         <div className="ml-auto flex items-center gap-3">
+          {['admin', 'marketing'].includes(activeRole) && (
+            <Button asChild variant="outline" size="sm" className="gap-1.5 text-xs">
+              <Link href="/leads"><UsersRound className="h-3.5 w-3.5" /> Leads e CSV</Link>
+            </Button>
+          )}
           {/* Analytics BI Button */}
           {['admin', 'marketing', 'tech'].includes(activeRole) && (
             <Button
