@@ -205,6 +205,18 @@ export async function POST(request: NextRequest) {
             : null,
         });
         if (processError) throw processError;
+        // The webhook has the buyer's currency, while process_hotmart_event
+        // currently only writes the amount. Mirror this field immediately so
+        // the unified CRM does not show an amount as "Não informado" until the
+        // next daily Sales API reconciliation.
+        if (parsedEvent!.currencyCode) {
+          const { error: currencyError } = await (supabase as any)
+            .from('purchases')
+            .update({ currency_code: parsedEvent!.currencyCode })
+            .eq('transaction_code', parsedEvent!.transactionCode)
+            .eq('last_event_at', parsedEvent!.eventOccurredAt);
+          if (currencyError) throw currencyError;
+        }
         if (parsedEvent!.includedProducts.length) {
           const { error: productsError } = await (supabase as any)
             .from('hotmart_purchase_products')

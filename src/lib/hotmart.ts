@@ -38,6 +38,7 @@ export interface HotmartWebhookPayload {
       price?: {
         value?: number;
         currency_value?: string;
+        currency_code?: string;
       };
       original_offer_price?: {
         value?: number;
@@ -79,6 +80,7 @@ export interface ParsedHotmartEvent {
   productName: string;
   includedProducts: Array<{ productId: number; productName: string }>;
   priceGross: number | null;
+  currencyCode: string | null;
   priceNet: number | null;
   purchaseDate: string;
   mappedJourneyState: JourneyState;
@@ -168,6 +170,10 @@ export function parseHotmartWebhook(payload: HotmartWebhookPayload): ParsedHotma
 
   const productName = product.name || 'Produto Canadá Sem Filtro';
   const priceGross = typeof purchase.price?.value === 'number' ? purchase.price.value : null;
+  const rawCurrency = purchase.price?.currency_value || purchase.price?.currency_code;
+  const normalizedCurrency = rawCurrency?.trim().toUpperCase();
+  const currencyCode = normalizedCurrency && /^[A-Z]{3}$/.test(normalizedCurrency)
+    ? normalizedCurrency : null;
   // The offer price is not the producer's net commission.
   const priceNet = null;
   const purchaseDate = parseHotmartDate(purchase.order_date) || eventOccurredAt;
@@ -208,6 +214,7 @@ export function parseHotmartWebhook(payload: HotmartWebhookPayload): ParsedHotma
         : [];
     }),
     priceGross,
+    currencyCode,
     priceNet,
     purchaseDate,
     mappedJourneyState,
