@@ -70,12 +70,13 @@ test('classifies refund and bundle courses without inventing net proceeds', () =
         content: { products: [{ id: 8259553, name: 'Simulador' }, { id: 7956815, name: 'Diário de Bordo' }] },
       },
       buyer: { email: 'buyer@example.test' },
-      purchase: { transaction: 'HP-REFUND-TEST', price: { value: 54.12 } },
+      purchase: { transaction: 'HP-REFUND-TEST', price: { value: 54.12, currency_value: 'BRL' } },
     },
   });
   expect(parsed).toMatchObject({
     mappedJourneyState: 'reembolso',
     priceGross: 54.12,
+    currencyCode: 'BRL',
     priceNet: null,
     includedProducts: [
       { productId: 8259553, productName: 'Simulador' },
